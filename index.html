@@ -501,7 +501,7 @@
   .bs-cell.disabled{ cursor:not-allowed; }
   .bs-cell.ship{ background: linear-gradient(135deg, #4a6fd4, #2d4ba0); }
   .bs-cell.hit{ background: var(--rose); animation: xoxPop .25s ease; }
-  .bs-cell.hit-success{ background: linear-gradient(135deg, #34d399, #16a34a); animation: xoxPop .25s ease; box-shadow: 0 0 10px rgba(52,211,153,.55); }
+  .bs-cell.hit-success{ background: linear-gradient(135deg, #fb923c, #ea580c); animation: xoxPop .25s ease; box-shadow: 0 0 10px rgba(251,146,60,.55); }
   .bs-cell.miss{ background: rgba(255,255,255,.14); }
   @media (max-width:480px){
     .bs-grid{ grid-template-columns: repeat(8, 27px); grid-template-rows: repeat(8, 27px); gap:2px; padding:6px; }
@@ -1328,6 +1328,12 @@
     width:30px; height:30px; border:none; border-radius:50%;
     padding:0; background:none; cursor:pointer;
   }
+  .bg-swatch{ border-radius:7px; }
+  .draw-toolbar-label{
+    font-size:10.5px; color: var(--ink-faint); font-weight:700;
+    text-transform:uppercase; letter-spacing:.04em; margin: 0 2px;
+  }
+  .draw-toolbar input[type="color"].bg-swatch{ border-radius:7px; }
 
   /* ---------- Draw canvas wrap + fullscreen ---------- */
   .draw-canvas-wrap{
@@ -1737,6 +1743,25 @@
     flex-shrink:0;
   }
 
+  /* Belirli bir kişiyi susturma ikonu — yalnızca karşı tarafın mesajlarında görünür */
+  .chat-msg-row:not(.me) .block-icon{ order:3; margin-left:4px; }
+  .block-icon.blocked{ color: var(--rose); }
+
+  /* Sohbet penceresini elle boyutlandırma tutamacı (PC ve mobilde) */
+  .chat-drawer-resize{
+    position:absolute; right:0; bottom:0; width:22px; height:22px;
+    cursor: nwse-resize; z-index:6; touch-action:none;
+  }
+  .chat-drawer-resize::before{
+    content:""; position:absolute; right:4px; bottom:4px; width:11px; height:11px;
+    background:
+      linear-gradient(135deg, transparent 0 40%, var(--ink-faint) 40% 55%, transparent 55% 100%),
+      linear-gradient(135deg, transparent 0 65%, var(--ink-faint) 65% 80%, transparent 80% 100%);
+    opacity:.7;
+  }
+  .chat-drawer-resize:hover::before{ opacity:1; }
+  .chat-drawer.minimized .chat-drawer-resize{ display:none; }
+
   @media (max-width: 880px){
     .mobile-fab{ display:flex; }
     .mobile-topbar{ display:flex; }
@@ -2054,6 +2079,7 @@
     <input type="text" id="chatMsgInput" placeholder="Mesaj yaz..." maxlength="500" onkeydown="if(event.key==='Enter') sendLiveChatMessage();">
     <button onclick="sendLiveChatMessage()">Gönder</button>
   </div>
+  <div class="chat-drawer-resize" id="chatDrawerResize" title="Sürükleyerek boyutlandır"></div>
 </div>
 
 <div class="glow glow-1"></div>
@@ -2323,6 +2349,7 @@
         <div class="draw-actions">
           <button class="reset-btn" onclick="clearCanvas()">🧹 Tuvali Temizle (ikinizde de)</button>
           <button class="draw-fs-btn" id="drawFsBtn" onclick="toggleDrawFullscreen()">⛶ Tam Ekran</button>
+          <button class="draw-fs-btn" onclick="downloadDrawCanvas()">⬇️ İndir</button>
         </div>
       </div>
     </section>
@@ -5433,14 +5460,204 @@
     "İlk aşkını hatırlıyor musun? Anlat.",
     "Benimle ilgili en çok neyi seviyorsun?",
     "Şu ana kadar yaptığın en cesur şey neydi?",
-    "Kendinde değiştirmek istediğin bir şey var mı?"
+    "Kendinde değiştirmek istediğin bir şey var mı?",
+    "Beni ilk gördüğünde ne düşündün?",
+    "Hayatındaki en utanç verici anın nedir?",
+    "En büyük korkun nedir?",
+    "Benimle ilgili küçük bir sırrın var mı?",
+    "Şu ana kadar söylediğin en büyük yalan neydi?",
+    "Bir günlüğüne başka biri olabilseydin kim olurdun?",
+    "En sevdiğin anımız hangisi?",
+    "Beni ne zaman sevdiğini fark ettin?",
+    "Gizlice hayranı olduğun bir ünlü var mı?",
+    "En garip alışkanlığın nedir?",
+    "Çocukken en çok neyden korkardın?",
+    "Bugüne kadar aldığın en kötü karar neydi?",
+    "Benimle tanışmadan önce hayalindeki ilişki nasıldı?",
+    "En kıskanç olduğun an neydi?",
+    "Bir süper gücün olsa ne olurdu?",
+    "En büyük pişmanlığın nedir?",
+    "Beni kızdırmak için bilerek yaptığın bir şey var mı?",
+    "İlk öpücüğümüzü hatırlıyor musun? Nasıl hissettin?",
+    "Hayatında değiştirmek istediğin bir olay var mı?",
+    "Gizlice yaptığın ama kimseye söylemediğin bir şey var mı?",
+    "En sevdiğin fiziksel özelliğim nedir?",
+    "Bir hayvana dönüşebilseydin hangisi olurdun?",
+    "Beni en çok ne zaman özlüyorsun?",
+    "Şu ana kadar yediğin en garip yemek neydi?",
+    "Sosyal medyada gizlice takip ettiğin biri var mı?",
+    "En utandığın 'yakalanma' anını anlat.",
+    "Bugüne kadar attığın en tuhaf mesaj kime gitti?",
+    "Beni sinirlendiren bir alışkanlığım var mı?",
+    "Çocukken olmak istediğin meslek neydi?",
+    "En sevdiğin çocukluk anın nedir?",
+    "Bir gün her şeyi itiraf etme şansın olsa ne söylerdin?",
+    "Telefonunda sildiğin ama unutamadığın bir mesaj var mı?",
+    "İlişkimizde en çok neyi kıskanıyorsun?",
+    "Beni ilk kez ne zaman 'bu kişi' diye düşündün?",
+    "En büyük hayal kırıklığın neydi?",
+    "Gizlice ağladığın bir film ya da dizi var mı?",
+    "Bir daha yaşamak istediğin bir anımız hangisi?",
+    "En tuhaf rüyanı anlat.",
+    "Bugüne kadar kırdığın en büyük kural neydi?",
+    "Benimle ilgili seni en çok ne heyecanlandırıyor?",
+    "Kendine güvenmediğin bir yönün var mı?",
+    "En garip fobin nedir?",
+    "Hiç kimseye anlatmadığın bir hayalin var mı?",
+    "Bir gün param sınırsız olsa ilk ne alırdın?",
+    "Beni en çok ne zaman gururlandırdın?",
+    "Geçmişte pişman olduğun bir ilişki anın var mı?",
+    "Aşk hayatında en çok neye önem verirsin?",
+    "Bir daha asla yapmayacağın bir şey var mı?",
+    "En sevdiğin 'bizim şarkımız' hangisi olurdu?",
+    "Hayatında en çok neye şükrediyorsun?",
+    "İlk kez aşık olduğunda neler hissettin?",
+    "En sevmediğin görevi/işi anlat.",
+    "Kıskançlığını nasıl belli edersin?",
+    "En büyük zaafın nedir?",
+    "Beni etkilemek için yaptığın en tuhaf şey neydi?",
+    "Bir sırrımı ele versem ne yapardın?",
+    "En sevdiğin anı fotoğrafımız hangisi?",
+    "Geceleri uyumadan önce ne düşünürsün?",
+    "Çocuk sahibi olma konusunda ne düşünüyorsun?",
+    "Hayatındaki en büyük başarı neydi?",
+    "Sana göre mükemmel bir randevu nasıl olur?",
+    "Beni en çok ne zaman özledin?",
+    "En garip yalan söylediğin an neydi?",
+    "Kendini en çok ne zaman güçsüz hissettin?",
+    "Aşk dilinde en çok neye ihtiyaç duyarsın?",
+    "Sana göre gerçek aşk nedir?",
+    "Benimle ilgili değiştirmek istediğin bir şey var mı?",
+    "En büyük hedefin nedir?",
+    "Kıskançlık krizine girdiğin bir anı anlat.",
+    "Geçmişte affedemediğin bir şey var mı?",
+    "Bir daha yaşasan farklı yapacağın bir seçim var mı?",
+    "En sevdiğin ortak anımız hangisi?",
+    "Beni ilk öptüğünde ne hissettin?",
+    "En sevdiğin sürprizi anlat.",
+    "Hayatta en çok neyden pişmanlık duyuyorsun?",
+    "Kendinle ilgili en gurur duyduğun şey nedir?",
+    "Aşkı ilk ne zaman hissettin?",
+    "En büyük hayalindeki tatil nereye olurdu?",
+    "Benimle birlikte olmayı ilk düşündüğün an neydi?",
+    "En büyük itirafın nedir?",
+    "Geçmişte kıskandığın bir eski sevgilin var mı?",
+    "Şu an en çok neyi merak ediyorsun benim hakkımda?",
+    "En büyük komplekslerin nedir?",
+    "Aşk hayatında en çok korktuğun şey nedir?",
+    "Bana söylemek isteyip de söyleyemediğin bir şey var mı?",
+    "En sevdiğin kompliman hangisiydi?",
+    "Bir daha ilk buluşmamızı yaşasak neyi değiştirirdin?",
+    "Hayatının en romantik anı hangisiydi?",
+    "En sevdiğin ortak alışkanlığımız nedir?",
+    "Kendini en mutlu hissettiğin an ne zamandı?",
+    "Bir gün her şeyi bırakıp gitsen nereye giderdin?",
+    "Benim yüzümden yaşadığın bir hayal kırıklığı oldu mu?",
+    "Sana göre ilişkimizin en güçlü yanı nedir?",
+    "Geleceğe dair en büyük hayalin nedir?",
+    "Beni sevdiğini ilk kez ne zaman anladın?"
   ];
   const dares = [
     "Partnerine 30 saniye boyunca gözlerinin içine bak.",
     "En komik dansını yap.",
     "Partnerine bir aşk şarkısı söyle.",
     "Partnerine samimi bir iltifat et.",
-    "Elini tutup 1 dakika sessizce otur."
+    "Elini tutup 1 dakika sessizce otur.",
+    "Partnerine gözlerin kapalıyken sarıl.",
+    "Bir hayvan taklidi yap.",
+    "Partnerine 3 güzel özelliğini say.",
+    "Robot gibi konuşarak bir cümle kur.",
+    "Partnerine kısa bir aşk mektubu yaz.",
+    "Gözlerin kapalıyken partnerinin yüzünü tarif et.",
+    "Bir şarkıyı sadece mırıldanarak söyle.",
+    "Partnerine 1 dakika masaj yap.",
+    "En sevdiğin anınızı canlandır.",
+    "Partnerine bir şiir oku ya da uydur.",
+    "10 saniye boyunca gülmeden dur.",
+    "Partnerine 'seni seviyorum' de — 3 farklı dilde (bilmiyorsan uydur).",
+    "Bir bebek gibi ağlama taklidi yap.",
+    "Partnerinin en sevdiği filminden bir sahneyi canlandır.",
+    "Partnerini yanağından öp.",
+    "Bir dakika boyunca sadece şarkı söyleyerek konuş.",
+    "Partnerine en komik fotoğrafını göster.",
+    "Sesini değiştirerek bir cümle söyle.",
+    "Partnerine bir kompliman yaz ve ona ver.",
+    "En sevdiğin dansı 30 saniye yap.",
+    "Göz teması kurarak 'makarna' kelimesini 10 kere söyle.",
+    "Bir ünlüyü taklit et, partnerin tahmin etsin.",
+    "Partnerine küçük bir sürpriz sözü ver.",
+    "Gözlerin kapalı partnerinin elini tanımaya çalış.",
+    "Partnerine bir aşk şarkısı ithaf et.",
+    "1 dakika boyunca sadece fısıldayarak konuş.",
+    "Partnerinin taklidini yap.",
+    "Bir hikaye uydur ve partnerine anlat.",
+    "Partnerine sarılıp 20 saniye öyle kal.",
+    "En garip yüz ifadeni yap ve fotoğrafını çektir.",
+    "Partnerine gelecekle ilgili küçük bir söz ver.",
+    "Bir tekerleme söyle, yanlış yaparsan tekrar et.",
+    "Partnerine sevdiğin 3 anıyı anlat.",
+    "Odada saklı bir eşyayı partnerine ipucuyla buldur.",
+    "Partnerine küçük bir dans dersi ver.",
+    "Gözlerin kapalı bir şey çiz, partnerin tahmin etsin.",
+    "Bir şarkı ismini mimikle anlat.",
+    "30 saniye boyunca sadece gülümse.",
+    "Partnerinin elini öp.",
+    "Bir kahraman pozu ver ve 10 saniye öyle dur.",
+    "Partnerine sevgi dolu bir ses kaydı bırak.",
+    "En sevdiğin yemeği partnerine ağzı sulanacak şekilde tarif et.",
+    "Partnerine minik bir sürpriz planla, şimdi anlat.",
+    "1 dakika boyunca sadece 'evet' ve 'hayır' ile konuş.",
+    "Partnerinle beraber en komik pozu vererek bir selfie çekin.",
+    "Gözlerin kapalı dans et.",
+    "Partnerine bir şarkı söyle ve kime ait olduğunu söyle.",
+    "En sevdiğin anınızı tek kelimeyle özetle.",
+    "10 saniye boyunca kaş göz hareketleri yap.",
+    "Bir aşk filmi repliği kullanarak konuş.",
+    "Partnerine samimi bir soru sor.",
+    "Elini kalbinin üstüne koy ve içinden geleni söyle.",
+    "Partnerine bir yeteneğini göster.",
+    "Gözlerin kapalı, partnerinin sesinden duygusunu tahmin et.",
+    "Partnerinle 1 dakika sessizce el ele tut.",
+    "En komik anınızı canlandır.",
+    "Partnerine kağıda bir aşk notu yaz ve bırak.",
+    "Bir şarkı sözünü ezbere söyle.",
+    "Partnerine minnettar olduğun bir şeyi söyle.",
+    "Kendi kendine espri yap ve gülmemeye çalış.",
+    "Partnerine bir 'ilk'ini anlat (ilk buluşma, ilk öpücük vb).",
+    "20 saniye boyunca sadece göz kırparak iletişim kur.",
+    "Partnerine sevdiğini gösteren küçük bir jest yap.",
+    "En sevdiğin şarkıyı çal ve birlikte dinleyin.",
+    "Partnerine kısa bir 'aşk mektubu' mesajı at.",
+    "Gözlerin kapalı, partnerinin parfümünü tanımaya çalış.",
+    "1 dakika boyunca komik bir aksanla konuş.",
+    "Partnerine geleceğe dair bir hayalini paylaş.",
+    "En sevdiğin anınızı tek cümlede anlat.",
+    "Partnerine 3 maddelik bir teşekkür listesi yap.",
+    "Elinle kalp şekli yap ve partnerine göster.",
+    "Partnerinle beraber kısa bir dans koreografisi uydurun.",
+    "Bir aşk şarkısını birlikte düete çevirin.",
+    "Partnerine sarılıp 'iyi ki varsın' de.",
+    "Gözlerin kapalı bir yiyeceği tattır, tahmin etsin.",
+    "Partnerine sürpriz bir alın öpücüğü ver.",
+    "En sevdiğin gülüşünü göster ve neden sevdiğini söyle.",
+    "Partnerine bir 'hayal randevusu' planla ve anlat.",
+    "1 dakika boyunca sadece iltifat et.",
+    "Partnerinle omuz omuza oturup sessizce 1 dakika geçirin.",
+    "En sevdiğin fotoğrafınızı göster ve anısını anlat.",
+    "Partnerine 'bugün seni mutlu eden şey neydi' diye sor ve dinle.",
+    "Gözlerin kapalı bir şarkı tahmin et, partnerin mırıldansın.",
+    "Partnerine küçük bir 'aşk oyunu' öner.",
+    "Elini partnerinin kalbine koy, birkaç saniye öyle kal.",
+    "En komik itirafını partnerine anlat.",
+    "Partnerine 'seninle gurur duyduğum an' ı anlat.",
+    "Bir şarkıyı bilerek yanlış sözlerle söyle.",
+    "Partnerine minik bir randevu planı yap, hemen şimdi.",
+    "Gözlerin kapalı yürüyerek partnerine ulaş.",
+    "En sevdiğin anınızı fotoğraf gibi tarif et.",
+    "Partnerine seni özel yapan şeyi söyle.",
+    "1 dakika boyunca sadece fısıltıyla iltifat et.",
+    "Partnerine bugün ya da yarın için küçük bir söz ver.",
+    "Partnerine sarıl ve 'seni seviyorum' de."
   ];
 
   function initTodSync(){
@@ -5543,9 +5760,11 @@ function toggleChatDrawer(){
     if(empty) empty.remove();
     const isMe = m.name === USER_NAME;
 
+    const senderName = m.name || 'Anonim';
     const row = document.createElement('div');
     row.className = 'chat-msg-row' + (isMe ? ' me' : '');
     if(key) row.dataset.msgKey = key;
+    row.dataset.msgName = senderName;
 
     const bubble = document.createElement('div');
     bubble.className = 'chat-msg' + (isMe ? ' me' : '');
@@ -5558,7 +5777,7 @@ function toggleChatDrawer(){
         '</span>';
     }
     bubble.innerHTML = quoteHtml +
-      '<span class="chat-msg-name">' + escapeHtml(m.name || 'Anonim') + '</span>' +
+      '<span class="chat-msg-name">' + escapeHtml(senderName) + '</span>' +
       escapeHtml(m.text || '');
 
     const replyIcon = document.createElement('button');
@@ -5569,6 +5788,22 @@ function toggleChatDrawer(){
 
     row.appendChild(bubble);
     row.appendChild(replyIcon);
+
+    // Karşı tarafı sessize alma ikonu — yalnızca başkasının mesajlarında görünür.
+    // Bu tamamen YEREL bir görünürlük ayarıdır: mesaj her zaman Firebase'e normal
+    // şekilde gönderilmeye devam eder, susturulan kişi susturulduğunu asla görmez —
+    // sadece senin ekranında o kişinin mesajları gizlenir.
+    if(!isMe){
+      const blockIcon = document.createElement('button');
+      blockIcon.type = 'button';
+      blockIcon.className = 'reply-icon block-icon' + (isUserBlocked(senderName) ? ' blocked' : '');
+      blockIcon.title = isUserBlocked(senderName) ? (senderName + ' susturmasını kaldır') : (senderName + ' kişisini sustur');
+      blockIcon.innerHTML = isUserBlocked(senderName) ? '🔊' : '🔇';
+      blockIcon.onclick = (ev) => { ev.stopPropagation(); toggleBlockUser(senderName); };
+      row.appendChild(blockIcon);
+      if(isUserBlocked(senderName)) row.style.display = 'none';
+    }
+
     body.appendChild(row);
     body.scrollTop = body.scrollHeight;
 
@@ -5663,9 +5898,42 @@ function toggleChatDrawer(){
     roomRef.child('messages').limitToLast(200).on('child_added', snap => {
       const m = snap.val();
       appendChatMessage(m, snap.key);
-      if(!chatDrawerOpen && !chatMuted && m && m.name !== USER_NAME){
+      if(!chatDrawerOpen && !chatMuted && m && m.name !== USER_NAME && !isUserBlocked(m.name)){
         unreadChatCount++;
         updateChatBadge();
+      }
+    });
+  }
+
+  // ---------- Kişi bazlı susturma (herkes istediği kişiyi susturabilir) ----------
+  // Sadece kendi tarafında o kişinin mesajlarını gizler; mesaj her zaman normal
+  // şekilde gönderilip Firebase'e ulaşır, susturulan kişi bunu asla fark etmez.
+  let blockedChatUsers = new Set();
+  (function initBlockedChatUsers(){
+    try{ blockedChatUsers = new Set(JSON.parse(localStorage.getItem('lover_chat_blocked') || '[]')); }catch(e){}
+  })();
+
+  function isUserBlocked(name){
+    return !!name && blockedChatUsers.has(name);
+  }
+
+  function saveBlockedChatUsers(){
+    try{ localStorage.setItem('lover_chat_blocked', JSON.stringify(Array.from(blockedChatUsers))); }catch(e){}
+  }
+
+  function toggleBlockUser(name){
+    if(!name) return;
+    if(blockedChatUsers.has(name)) blockedChatUsers.delete(name);
+    else blockedChatUsers.add(name);
+    saveBlockedChatUsers();
+    const blocked = isUserBlocked(name);
+    document.querySelectorAll('.chat-msg-row[data-msg-name="' + CSS.escape(name) + '"]').forEach(row => {
+      row.style.display = blocked ? 'none' : '';
+      const btn = row.querySelector('.block-icon');
+      if(btn){
+        btn.classList.toggle('blocked', blocked);
+        btn.innerHTML = blocked ? '🔊' : '🔇';
+        btn.title = blocked ? (name + ' susturmasını kaldır') : (name + ' kişisini sustur');
       }
     });
   }
@@ -5691,6 +5959,70 @@ function toggleChatDrawer(){
     updateChatMuteBtn();
     if(chatMuted){ unreadChatCount = 0; updateChatBadge(); }
   }
+
+  // ---------- Elle boyutlandırma (sağ-alt köşedeki tutamaç, PC ve telefonda çalışır) ----------
+  // Not: maximize/minimize sabit ölçüler veriyordu, bu ise kullanıcının pencereyi
+  // istediği ölçüye serbestçe sürükleyip büyütüp küçültmesini sağlıyor; son ölçü
+  // localStorage'a kaydedilip bir sonraki açılışta hatırlanıyor.
+  (function initChatDrawerResize(){
+    const drawer = document.getElementById('chatDrawer');
+    const handle = document.getElementById('chatDrawerResize');
+    if(!drawer || !handle) return;
+    const MIN_W = 260, MIN_H = 220;
+    let resizing = false, startX = 0, startY = 0, startW = 0, startH = 0;
+
+    try{
+      const saved = JSON.parse(localStorage.getItem('lover_chat_size') || 'null');
+      if(saved && saved.width > 0 && saved.height > 0){
+        drawer.style.width = Math.min(saved.width, window.innerWidth - 12) + 'px';
+        drawer.style.height = Math.min(saved.height, window.innerHeight - 12) + 'px';
+        drawer.style.maxWidth = 'none';
+        drawer.style.maxHeight = 'none';
+      }
+    }catch(e){}
+
+    function onDown(e){
+      resizing = true;
+      const rect = drawer.getBoundingClientRect();
+      const point = e.touches ? e.touches[0] : e;
+      startX = point.clientX; startY = point.clientY;
+      startW = rect.width; startH = rect.height;
+      drawer.style.transition = 'none';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchmove', onMove, { passive:false });
+      document.addEventListener('touchend', onUp);
+      if(e.cancelable) e.preventDefault();
+    }
+    function onMove(e){
+      if(!resizing) return;
+      if(e.cancelable) e.preventDefault();
+      const point = e.touches ? e.touches[0] : e;
+      const maxW = window.innerWidth - 12;
+      const maxH = window.innerHeight - 12;
+      const w = Math.min(maxW, Math.max(MIN_W, startW + (point.clientX - startX)));
+      const h = Math.min(maxH, Math.max(MIN_H, startH + (point.clientY - startY)));
+      drawer.style.width = w + 'px';
+      drawer.style.height = h + 'px';
+      drawer.style.maxWidth = 'none';
+      drawer.style.maxHeight = 'none';
+    }
+    function onUp(){
+      if(!resizing) return;
+      resizing = false;
+      drawer.style.transition = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+      try{
+        const rect = drawer.getBoundingClientRect();
+        localStorage.setItem('lover_chat_size', JSON.stringify({ width: Math.round(rect.width), height: Math.round(rect.height) }));
+      }catch(e){}
+    }
+    handle.addEventListener('mousedown', onDown);
+    handle.addEventListener('touchstart', onDown, { passive:false });
+  })();
 
   // ---------- Küçült / Büyüt ----------
   function toggleChatMinimize(){
@@ -5804,7 +6136,9 @@ function toggleChatDrawer(){
   const canvas = document.getElementById('drawCanvas');
   const ctx = canvas.getContext('2d');
   const drawColors = ['#ffffff','#9ca3af','#c9b6ff','#8b5cf6','#f472b6','#f8c471','#fca5a5','#86efac','#7dd3fc','#fdba74'];
+  const drawBgColors = ['#0d0a14','#ffffff','#1a1a2e','#f5f0ff','#111827','#2d1b00','#0f2027','#fdf2f8'];
   let currentColor = drawColors[0];
+  let currentBgColor = drawBgColors[0];
   ctx.strokeStyle = currentColor;
   ctx.lineCap = 'round';
   let drawing = false;
@@ -5812,8 +6146,7 @@ function toggleChatDrawer(){
   let strokeHistory = []; // yeniden boyutlandırmada tuvali tekrar çizebilmek için (normalize 0-1 koordinatlar), her biri _key taşır
   let lastClearTs = 0;
   let drawClearInitialized = false;
-  let currentStrokeKeys = []; // şu an çizilmekte olan vuruşun Firebase anahtarları
-  let myStrokeGroups = [];    // kendi geçmiş vuruşlarım (her biri bir anahtar dizisi) — sadece kendi "geri al" tuşum için
+  let currentStrokeId = null; // şu an çizilmekte olan vuruşun ortak kimliği (aynı sürüklemedeki tüm parçalar aynı id'yi taşır)
 
   (function buildDrawToolbar(){
     const bar = document.getElementById('drawToolbar');
@@ -5852,6 +6185,32 @@ function toggleChatDrawer(){
     undoBtn.textContent = '↩️';
     undoBtn.addEventListener('click', undoLastStroke);
     bar.appendChild(undoBtn);
+
+    const sep2 = document.createElement('div');
+    sep2.className = 'draw-toolbar-sep';
+    bar.appendChild(sep2);
+
+    const bgLabel = document.createElement('span');
+    bgLabel.className = 'draw-toolbar-label';
+    bgLabel.textContent = 'Zemin';
+    bar.appendChild(bgLabel);
+
+    drawBgColors.forEach((c, idx) => {
+      const sw = document.createElement('div');
+      sw.className = 'color-swatch bg-swatch' + (idx === 0 ? ' active' : '');
+      sw.style.background = c;
+      sw.title = 'Arka plan: ' + c;
+      sw.dataset.bgSwatch = '1';
+      sw.addEventListener('click', () => selectBgColor(c, sw));
+      bar.appendChild(sw);
+    });
+    const customBg = document.createElement('input');
+    customBg.type = 'color';
+    customBg.className = 'bg-swatch';
+    customBg.value = currentBgColor;
+    customBg.title = 'Özel arka plan rengi';
+    customBg.addEventListener('input', (e) => selectBgColor(e.target.value, null));
+    bar.appendChild(customBg);
   })();
 
   let isErasing = false;
@@ -5867,8 +6226,55 @@ function toggleChatDrawer(){
     isErasing = false;
     const eraserBtn = document.getElementById('drawEraserBtn');
     if(eraserBtn) eraserBtn.classList.remove('active-tool');
-    document.querySelectorAll('#drawToolbar .color-swatch').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('#drawToolbar .color-swatch:not(.bg-swatch)').forEach(s => s.classList.remove('active'));
     if(swatchEl) swatchEl.classList.add('active');
+  }
+
+  // Ortak tuvalin ARKA PLAN rengini değiştirir — Firebase'e yazılır, böylece
+  // iki taraf da aynı zemin rengini anında görür (sadece kendi tarafında değil).
+  function selectBgColor(c, swatchEl){
+    currentBgColor = c;
+    canvas.style.background = c;
+    document.querySelectorAll('#drawToolbar .bg-swatch').forEach(s => s.classList.remove('active'));
+    if(swatchEl) swatchEl.classList.add('active');
+    if(roomRef) roomRef.child('draw/bgColor').set(c);
+  }
+
+  function applyRemoteBgColor(c){
+    if(!c || c === currentBgColor) { if(c) currentBgColor = c; return; }
+    currentBgColor = c;
+    canvas.style.background = c;
+    document.querySelectorAll('#drawToolbar .bg-swatch').forEach(s => {
+      const isCustomInput = s.tagName === 'INPUT';
+      s.classList.toggle('active', !isCustomInput && s.style.background === c);
+      if(isCustomInput) s.value = c;
+    });
+  }
+
+  // Tuvali (çizim + zemin rengiyle birlikte) PNG olarak indirir.
+  // Tuvalin kendisi şeffaf olduğu için, indirirken geçici bir kopyaya önce
+  // zemin rengini, sonra çizimi çiziyoruz — indirilen görselde arka plan kaybolmasın diye.
+  function downloadDrawCanvas(){
+    try{
+      const tmp = document.createElement('canvas');
+      tmp.width = canvas.width || 800;
+      tmp.height = canvas.height || 400;
+      const tctx = tmp.getContext('2d');
+      tctx.fillStyle = currentBgColor || '#0d0a14';
+      tctx.fillRect(0, 0, tmp.width, tmp.height);
+      tctx.drawImage(canvas, 0, 0);
+      tmp.toBlob(blob => {
+        if(!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'ortak-cizim-' + Date.now() + '.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      }, 'image/png');
+    }catch(e){}
   }
 
   // Tuvalin gerçek piksel çözünürlüğünü, ekranda göründüğü boyuta göre ayarlar.
@@ -5923,29 +6329,30 @@ function toggleChatDrawer(){
     ctx.restore();
   }
 
-  function startDraw(e){ drawing = true; lastPos = getPos(e); currentStrokeKeys = []; }
+  function startDraw(e){
+    drawing = true;
+    lastPos = getPos(e);
+    // Aynı sürükleme boyunca çizilen tüm parçalar aynı strokeId'yi paylaşır —
+    // "geri al" bu id'ye göre çalışır, yerel oturum hafızasına değil.
+    currentStrokeId = (USER_NAME || 'Anonim') + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  }
   function moveDraw(e){
     if(!drawing) return;
     const p = getPos(e);
-    const seg = { x0: lastPos.x, y0: lastPos.y, x1: p.x, y1: p.y, color: currentColor, erase: !!isErasing };
+    const seg = { x0: lastPos.x, y0: lastPos.y, x1: p.x, y1: p.y, color: currentColor, erase: !!isErasing, by: USER_NAME || 'Anonim', strokeId: currentStrokeId };
     drawSegment(seg.x0, seg.y0, seg.x1, seg.y1, seg.color, seg.erase);
     let key = null;
     if(roomRef){
       const ref = roomRef.child('draw/strokes').push(seg);
       key = ref.key;
-      currentStrokeKeys.push(key);
     }
     strokeHistory.push({ ...seg, _key: key });
     lastPos = p;
     e.preventDefault();
   }
   function endDraw(){
-    if(drawing && currentStrokeKeys.length){
-      myStrokeGroups.push(currentStrokeKeys);
-      if(myStrokeGroups.length > 40) myStrokeGroups.shift(); // hafızayı şişirmeyelim
-    }
-    currentStrokeKeys = [];
     drawing = false;
+    currentStrokeId = null;
   }
 
   canvas.addEventListener('mousedown', startDraw);
@@ -5957,21 +6364,32 @@ function toggleChatDrawer(){
   canvas.addEventListener('touchend', endDraw);
 
   // Kendi son vuruşunu geri al — sadece kendi çizdiklerini siler, partnerinkine dokunmaz.
-  // Tek bir toplu (atomik) Firebase güncellemesiyle siliniyor, böylece ikinizin ekranında da
-  // tutarlı ve eksiksiz şekilde anında uygulanıyor.
+  // ÖNEMLİ DÜZELTME: eskiden bu, sadece o an açık olan sekmenin hafızasında tuttuğu
+  // (myStrokeGroups) bir listeye bakıyordu — sayfa yenilendiğinde bu liste boşalıyor ve
+  // buton hiçbir şey yapmadan "bozuk" görünüyordu. Artık gerçek kaynağa, yani Firebase'den
+  // gelen strokeHistory'ye (herkesin her an gördüğü veri) bakıyor; bu yüzden sayfa yenilense
+  // bile kendi son vuruşunu her zaman güvenilir şekilde geri alabiliyorsun.
   function undoLastStroke(){
-    if(!roomRef || !myStrokeGroups.length) return;
-    const keys = myStrokeGroups.pop();
+    if(!roomRef) return;
+    const me = USER_NAME || 'Anonim';
+    let lastId = null;
+    for(let i = strokeHistory.length - 1; i >= 0; i--){
+      const s = strokeHistory[i];
+      if(s.by === me && s._key){ lastId = s.strokeId || ('__solo__' + s._key); break; }
+    }
+    if(!lastId) return; // kendine ait, geri alınabilecek bir vuruş yok
     const updates = {};
-    keys.forEach(k => { if(k) updates[k] = null; });
+    strokeHistory.forEach(s => {
+      const sid = s.strokeId || (s._key ? ('__solo__' + s._key) : null);
+      if(sid === lastId && s._key) updates[s._key] = null;
+    });
     if(Object.keys(updates).length) roomRef.child('draw/strokes').update(updates);
   }
 
   // Tuvali temizle — ikinizin ekranında da anında temizlenir (Firebase üzerinden senkron sinyal)
   function clearCanvas(){
     strokeHistory = [];
-    myStrokeGroups = [];
-    currentStrokeKeys = [];
+    currentStrokeId = null;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if(roomRef){
       roomRef.child('draw/strokes').remove();
@@ -5981,8 +6399,8 @@ function toggleChatDrawer(){
 
   function initDrawSync(){
     strokeHistory = [];
-    myStrokeGroups = [];
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.style.background = currentBgColor;
     roomRef.child('draw/strokes').on('child_added', snap => {
       const s = snap.val();
       if(!s) return;
@@ -6005,9 +6423,13 @@ function toggleChatDrawer(){
       if(ts && ts !== lastClearTs){
         lastClearTs = ts;
         strokeHistory = [];
-        myStrokeGroups = [];
         ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
+    });
+    // Zemin (arka plan) rengi — biri değiştirdiğinde ikinizde de anında güncellenir.
+    roomRef.child('draw/bgColor').on('value', snap => {
+      const c = snap.val();
+      if(c) applyRemoteBgColor(c);
     });
     resizeDrawCanvas();
   }
