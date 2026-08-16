@@ -115,8 +115,15 @@
     width:34px; height:34px;
     border-radius:10px;
     display:flex; align-items:center; justify-content:center;
-    background: linear-gradient(135deg, var(--violet), var(--rose));
+    background: var(--bg-soft);
     font-size:17px;
+    overflow:hidden;
+  }
+  .brand-mark:not(:has(img)){
+    background: linear-gradient(135deg, var(--violet), var(--rose));
+  }
+  .brand-mark img{
+    width:100%; height:100%; object-fit:cover; display:block; border-radius:inherit;
   }
   .brand-name{
     font-family:'Fraunces', serif;
@@ -1078,7 +1085,7 @@
     padding: 34px 30px;
     text-align:center;
   }
-  .gate-box .brand-mark{ margin: 0 auto 14px; }
+  .gate-box .brand-mark{ width:52px; height:52px; border-radius:14px; margin: 0 auto 14px; }
   .gate-box h2{ font-size:21px; color:#fff; margin-bottom:6px; }
   .gate-box p{ color:var(--ink-dim); font-size:13.5px; margin-bottom:22px; }
   .gate-row{ display:flex; gap:8px; margin-bottom:12px; }
@@ -2014,7 +2021,7 @@
       <button type="button" id="langBtnTr" onclick="setLang('tr')" class="active">TR</button>
       <button type="button" id="langBtnEn" onclick="setLang('en')">EN</button>
     </div>
-    <div class="brand-mark">💞</div>
+    <div class="brand-mark"><img src="logo.jpg" alt="Vibesal"></div>
     <h2 data-i18n="gateTitle">Odana gir</h2>
     <p data-i18n="gateSub">Adını ve oda kodunu gir, arkadaşlarınla anında senkron olun.</p>
 
@@ -2105,7 +2112,7 @@
 
 <div class="mobile-topbar" id="mobileTopbar">
   <div class="mt-left">
-    <div class="brand-mark">💞</div>
+    <div class="brand-mark"><img src="logo.jpg" alt="Vibesal"></div>
     <span class="mt-name" id="mobileUserName">İsimsiz</span>
   </div>
   <div class="mt-presence" id="mtPresence"></div>
@@ -2170,7 +2177,7 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-mark">💞</div>
+      <div class="brand-mark"><img src="logo.jpg" alt="Vibesal"></div>
       <div class="brand-name">Vibesal
       </div>
     </div>
@@ -10293,6 +10300,75 @@ function toggleChatDrawer(){
       }
     });
   }
+</script>
+
+<!-- ================================================================
+     GÜVENLİK ÖNLEMLERİ (F12 / geliştirici araçları caydırması)
+     ÖNEMLİ NOT: Tarayıcı geliştirici araçlarını istemci tarafı JS ile
+     %100 engellemek TEKNİK OLARAK MÜMKÜN DEĞİLDİR — kullanıcı bunları
+     her zaman tarayıcı menüsünden (⋮ > Diğer araçlar > Geliştirici
+     araçları) ya da harici bir araçla açabilir; hiçbir web sitesi bunu
+     gerçek anlamda engelleyemez. Aşağıdakiler "en iyi çaba" (best-effort)
+     seviyesinde CAYDIRICI önlemlerdir: sağ tık menüsünü ve en yaygın
+     kısayolları (F12, Ctrl+Shift+I/J/C, Ctrl+U, Ctrl+S) engeller, panel
+     açık gibi göründüğünde nazik bir uyarı overlay'i gösterir. Bu asla
+     gerçek bir güvenlik sınırı değildir — hassas hiçbir şey (şifre,
+     yetki kontrolü vb.) istemci koduna güvenilerek saklanmamalı, gerçek
+     koruma her zaman sunucu tarafında (Firebase Realtime Database
+     Rules) yapılmalıdır; bu dosyadaki JS zaten herkes tarafından F12
+     olmadan da "Kaynağı Görüntüle" ile okunabilir.
+     ================================================================ -->
+<style>
+  #devtoolsWarnOverlay{
+    position:fixed; inset:0; z-index:99999; display:none;
+    background: rgba(10,8,20,.97); backdrop-filter: blur(6px);
+    align-items:center; justify-content:center; text-align:center; padding:24px;
+    font-family:'Manrope',sans-serif;
+  }
+  #devtoolsWarnOverlay.show{ display:flex; }
+  #devtoolsWarnOverlay .dt-box{ max-width:360px; }
+  #devtoolsWarnOverlay .dt-emoji{ font-size:44px; margin-bottom:14px; }
+  #devtoolsWarnOverlay h3{ color:#fff; font-family:'Fraunces',serif; font-size:20px; margin-bottom:8px; }
+  #devtoolsWarnOverlay p{ color:#b9b3c9; font-size:13.5px; line-height:1.5; }
+</style>
+<div id="devtoolsWarnOverlay">
+  <div class="dt-box">
+    <div class="dt-emoji">🔒</div>
+    <h3>Geliştirici paneli algılandı</h3>
+    <p>Bu sayfa geliştirici araçları açıkken kullanılamaz. Devam etmek için lütfen paneli kapat.</p>
+  </div>
+</div>
+<script>
+(function(){
+  // Sağ tık (context menu) kapalı — kaynağı sağ tıkla incelemeyi zorlaştırır.
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+  // En yaygın "devtools aç / kaynağı görüntüle / kaydet" kısayollarını engelle.
+  document.addEventListener('keydown', function(e){
+    const k = e.key;
+    const blocked =
+      k === 'F12' ||
+      (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].indexOf(k) !== -1) ||
+      (e.metaKey && e.altKey && ['I', 'i', 'J', 'j', 'C', 'c'].indexOf(k) !== -1) || // Mac: Cmd+Opt+I/J/C
+      (e.ctrlKey && ['U', 'u', 'S', 's'].indexOf(k) !== -1); // Ctrl+U (kaynak) / Ctrl+S (kaydet)
+    if(blocked){ e.preventDefault(); e.stopPropagation(); }
+  }, true);
+
+  // Pencerenin dış/iç boyut farkına bakarak devtools panelinin dock edilmiş
+  // (yan/alt yapışık) halde açık olup olmadığını TAHMİN et — kesin bir
+  // yöntem değildir (dar ekranlarda/split-screen'de yanlış pozitif verebilir),
+  // bu yüzden eşik değeri bilerek geniş tutuldu.
+  const THRESH = 160;
+  function checkDevtools(){
+    const wDiff = window.outerWidth - window.innerWidth;
+    const hDiff = window.outerHeight - window.innerHeight;
+    const open = wDiff > THRESH || hDiff > THRESH;
+    const overlay = document.getElementById('devtoolsWarnOverlay');
+    if(overlay) overlay.classList.toggle('show', open);
+  }
+  setInterval(checkDevtools, 800);
+  window.addEventListener('resize', checkDevtools);
+})();
 </script>
 
 </body>
