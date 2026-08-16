@@ -1165,6 +1165,18 @@
     background: linear-gradient(90deg, var(--violet), var(--rose)); color:#fff; cursor:pointer; font-family:'Manrope',sans-serif;
   }
   .public-rooms-empty{ text-align:center; color: var(--ink-faint); font-size:13px; padding: 22px 0; }
+
+  /* Yönetici Paneli — public-room-row ile aynı görsel dil, silme butonu farklı */
+  .admin-rooms-list{ display:flex; flex-direction:column; gap:8px; max-height:520px; overflow-y:auto; }
+  .admin-del-btn{
+    flex-shrink:0; border:1px solid #f38b8b; border-radius:9px; padding:8px 12px; font-size:12px; font-weight:700;
+    background: rgba(243,139,139,.14); color:#ffb3b3; cursor:pointer; font-family:'Manrope',sans-serif;
+  }
+  .admin-del-btn:hover{ background: rgba(243,139,139,.26); }
+  .admin-empty-tag{
+    display:inline-block; font-size:10px; font-weight:800; color:#ffb3b3;
+    background: rgba(243,139,139,.16); border-radius:6px; padding:1px 6px; margin-left:6px;
+  }
   .owner-visibility-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--stroke); }
   .owner-visibility-row select{
     background: var(--panel); border:1px solid var(--stroke); color:#fff; border-radius:8px;
@@ -2244,6 +2256,8 @@
       <div class="nav-item" data-view="sn"><span class="ic">🐍</span><span data-i18n="nav_sn">Snake VS</span></div>
       <div class="nav-item" data-view="pong"><span class="ic">🏓</span><span data-i18n="nav_pong">Pong</span></div>
       <div class="nav-item" data-view="ish"><span class="ic">🔤</span><span data-i18n="nav_ish">İsim Şehir Hayvan</span></div>
+      <div style="height:1px;background:var(--stroke);margin:10px 6px;"></div>
+      <div class="nav-item" data-view="admin"><span class="ic">🛡️</span><span data-i18n="nav_admin">Yönetici Paneli</span></div>
     </nav>
 
     <div class="presence-bar" id="presenceBar"></div>
@@ -3346,6 +3360,54 @@
       </div>
     </section>
 
+    <!-- YÖNETİCİ PANELİ -->
+    <section class="view" id="view-admin">
+      <div class="back-row"><button class="back-btn" onclick="navigateTo('home')">← Ana Sayfa</button></div>
+      <div class="sub-hero">
+        <div class="emoji-lg">🛡️</div>
+        <div><h2>Yönetici Paneli</h2><br><span>Eski/terk edilmiş odaları veritabanından temizle</span></div>
+      </div>
+
+      <div class="panel-box" id="adminNotAuthorized" style="display:none;">
+        <div style="font-size:14px;color:var(--ink-dim);line-height:1.6;text-align:left;">
+          <p style="margin-bottom:12px;"><b>Bu tarayıcı henüz yönetici olarak tanımlı değil.</b> Yönetici paneli, veritabanındaki <code>admins/&lt;senin-uid'in&gt;</code> yolu <code>true</code> olarak ayarlanmış cihazlara açılır.</p>
+          <p style="margin-bottom:6px;">Kendi Auth UID'in:</p>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;">
+            <code id="adminMyUid" style="flex:1;background:var(--bg-soft);border:1px solid var(--stroke);border-radius:8px;padding:10px 12px;font-size:12.5px;word-break:break-all;color:#fff;">—</code>
+            <button class="reset-btn" style="margin:0;flex-shrink:0;" onclick="adminCopyUid()">📋 Kopyala</button>
+          </div>
+          <p style="margin-bottom:6px;"><b>Nasıl yönetici olurum?</b></p>
+          <ol style="padding-left:18px;line-height:1.9;">
+            <li>Firebase Console → projen → <b>Realtime Database</b> → <b>Data</b> sekmesi (Rules değil!)</li>
+            <li>Kök dizinde (root) <b>+</b> ile yeni bir çocuk düğüm ekle: <code>admins</code></li>
+            <li><code>admins</code> altına, yukarıdaki UID'i anahtar olarak, değerini de boolean <code>true</code> yaparak ekle</li>
+            <li>Bu sayfayı yenile — panel otomatik açılacak</li>
+          </ol>
+        </div>
+      </div>
+
+      <div id="adminPanelBody" style="display:none;">
+        <div class="panel-box" style="text-align:center;">
+          <div class="xox-score" style="justify-content:center;margin-bottom:6px;">
+            <div class="xox-score-item"><span class="xox-score-label">Toplam Oda</span><span class="xox-score-val" id="adminTotalRooms">0</span></div>
+            <div class="xox-score-div">—</div>
+            <div class="xox-score-item"><span class="xox-score-label">Boş / Terk Edilmiş</span><span class="xox-score-val" id="adminEmptyRooms">0</span></div>
+          </div>
+          <div class="xox-actions" style="justify-content:center;margin-top:12px;flex-wrap:wrap;">
+            <button class="reset-btn" onclick="adminLoadRooms()">🔄 Listeyi Yenile</button>
+            <button class="reset-btn ghost" onclick="adminCleanupEmpty()">🧹 Boş Odaları Temizle</button>
+          </div>
+          <div style="font-size:11.5px;color:var(--ink-faint);margin-top:10px;">"Boş" = içinde şu an kimse olmayan (presence'sız) odalar · silme işlemi geri alınamaz</div>
+        </div>
+
+        <div class="panel-box" style="margin-top:16px;text-align:left;">
+          <input type="text" id="adminSearchInput" placeholder="Oda kodu veya başlığa göre filtrele..." oninput="adminRenderList()"
+            style="width:100%;background:var(--bg-soft);border:1px solid var(--stroke);border-radius:10px;padding:10px 12px;color:#fff;font-size:13.5px;font-family:'Manrope',sans-serif;margin-bottom:14px;">
+          <div id="adminRoomsList"><div class="public-rooms-empty">Yükleniyor...</div></div>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -3544,7 +3606,7 @@
       nav_reaction:'Reaksiyon Düellosu', nav_taprace:'Tıklama Yarışı', nav_memory:'Hafıza Kartları', nav_drawguess:'Çiz ve Tahmin Et',
       nav_whoami:'Kimim Ben?', nav_uno:'UNO', nav_g2048:'2048', nav_maze:'Labirent', nav_c4:'Connect 4',
       nav_bs:'Battleship', nav_sn:'Snake VS', nav_pong:'Pong', nav_anagram:'Kelime Bulmaca',
-      nav_ish:'İsim Şehir Hayvan',
+      nav_ish:'İsim Şehir Hayvan', nav_admin:'Yönetici Paneli',
       recentRooms:'Son Odaların', clearRecent:'Temizle', justNow:'az önce', minAgo:' dk önce',
       hourAgo:' sa önce', dayAgo:' gün önce', sendReaction:'⚡ Reaksiyon Gönder'
     },
@@ -3582,7 +3644,7 @@
     nav_reaction:'Reaction Duel', nav_taprace:'Tap Race', nav_memory:'Memory Cards', nav_drawguess:'Draw & Guess',
     nav_whoami:'Who Am I?', nav_uno:'UNO', nav_g2048:'2048', nav_maze:'Maze', nav_c4:'Connect 4',
     nav_bs:'Battleship', nav_sn:'Snake VS', nav_pong:'Pong', nav_anagram:'Word Scramble',
-    nav_ish:'Name City Animal'
+    nav_ish:'Name City Animal', nav_admin:'Admin Panel'
   };
   Object.assign(I18N_DICT.en, I18N_DICT.en.__nav);
 
@@ -4533,7 +4595,11 @@
   // Ben tıkladığımda çağrılır: yerelde geçiş yap + partnerin de gelmesi için Firebase'e yaz.
   function navigateTo(name){
     showView(name);
-    if(roomRef) roomRef.child('nav').set({ view: name, by: USER_NAME || null, byId: myPresenceId, ts: Date.now() });
+    // Yönetici paneli kişisel bir araç — partnerin ekranını da oraya
+    // sürüklemesin diye (diğer oyun görünümlerinin aksine) nav-sync
+    // yayınından bilerek hariç tutuluyor.
+    if(roomRef && name !== 'admin') roomRef.child('nav').set({ view: name, by: USER_NAME || null, byId: myPresenceId, ts: Date.now() });
+    if(name === 'admin' && typeof adminEnterView === 'function') adminEnterView();
   }
 
   // Partnerin gezinme değişikliklerini dinle — kendi yaptığım geçişte de bu tetiklenir
@@ -10299,6 +10365,137 @@ function toggleChatDrawer(){
         statusEl.textContent = 'Tur bitti! Yeni tur için butona bas 🎉';
       }
     });
+  }
+
+  // ==================================================================
+  // YÖNETİCİ PANELİ — tüm 'rooms' kökünü okuyup terk edilmiş/boş odaları
+  // listeler ve siler. Bu panelin GERÇEK yetkilendirmesi tamamen Firebase
+  // Rules tarafında yapılır (bkz. database.rules.json — 'admins/<uid>:
+  // true' olarak işaretlenmiş cihazlar 'rooms' kökünü okuyup silebilir).
+  // Buradaki JS sadece arayüz; yetkisiz bir tarayıcı 'rooms' kökünü
+  // okumaya çalıştığında Firebase zaten PERMISSION_DENIED ile reddeder —
+  // aşağıdaki kod sadece o durumda "nasıl yönetici olunur" ekranını
+  // gösterir. Odaya özgü değildir, roomRef değil doğrudan db kullanılır.
+  // ==================================================================
+  let adminRoomsData = null; // { code: { meta, presence, ... } } — son yüklenen anlık görüntü
+
+  function adminEnterView(){
+    const uidEl = document.getElementById('adminMyUid');
+    if(uidEl) uidEl.textContent = myAuthUid || '(auth henüz hazır değil, birkaç saniye bekleyip "Listeyi Yenile"ye bas)';
+    adminLoadRooms();
+  }
+
+  function adminCopyUid(){
+    if(!myAuthUid) return;
+    const btn = document.getElementById('adminCopyBtn');
+    navigator.clipboard.writeText(myAuthUid).then(() => {
+      if(!btn) return;
+      const old = btn.textContent;
+      btn.textContent = '✅ Kopyalandı';
+      setTimeout(() => { btn.textContent = old; }, 1400);
+    }).catch(() => { if(btn) btn.textContent = '❌ Kopyalanamadı'; });
+  }
+
+  function adminUpdateCounts(){
+    if(!adminRoomsData) return;
+    const codes = Object.keys(adminRoomsData);
+    const emptyCount = codes.filter(c => {
+      const room = adminRoomsData[c] || {};
+      return !room.presence || !Object.keys(room.presence).length;
+    }).length;
+    const totalEl = document.getElementById('adminTotalRooms');
+    const emptyEl = document.getElementById('adminEmptyRooms');
+    if(totalEl) totalEl.textContent = codes.length;
+    if(emptyEl) emptyEl.textContent = emptyCount;
+  }
+
+  function adminLoadRooms(){
+    if(!db) return;
+    const listEl = document.getElementById('adminRoomsList');
+    if(listEl) listEl.innerHTML = '<div class="public-rooms-empty">Yükleniyor...</div>';
+    db.ref('rooms').once('value').then(snap => {
+      adminRoomsData = snap.val() || {};
+      document.getElementById('adminNotAuthorized').style.display = 'none';
+      document.getElementById('adminPanelBody').style.display = 'block';
+      adminUpdateCounts();
+      adminRenderList();
+    }).catch(() => {
+      // Muhtemelen bu cihaz henüz 'admins/<uid>: true' olarak işaretlenmedi.
+      adminRoomsData = null;
+      document.getElementById('adminPanelBody').style.display = 'none';
+      document.getElementById('adminNotAuthorized').style.display = 'block';
+    });
+  }
+
+  function adminRenderList(){
+    const listEl = document.getElementById('adminRoomsList');
+    if(!listEl || !adminRoomsData) return;
+    const qInput = document.getElementById('adminSearchInput');
+    const q = qInput ? qInput.value.trim().toLocaleLowerCase('tr') : '';
+    const codes = Object.keys(adminRoomsData).sort((a, b) => {
+      const ta = (adminRoomsData[a].meta && adminRoomsData[a].meta.createdAt) || 0;
+      const tb = (adminRoomsData[b].meta && adminRoomsData[b].meta.createdAt) || 0;
+      return tb - ta;
+    });
+    const filtered = codes.filter(code => {
+      if(!q) return true;
+      const m = adminRoomsData[code].meta || {};
+      return code.toLocaleLowerCase('tr').includes(q) ||
+        (m.title || '').toLocaleLowerCase('tr').includes(q) ||
+        (m.ownerName || '').toLocaleLowerCase('tr').includes(q);
+    });
+    if(!filtered.length){
+      listEl.innerHTML = '<div class="public-rooms-empty">Eşleşen oda yok</div>';
+      return;
+    }
+    listEl.innerHTML = '<div class="admin-rooms-list">' + filtered.map(code => {
+      const room = adminRoomsData[code] || {};
+      const m = room.meta || {};
+      const presCount = room.presence ? Object.keys(room.presence).length : 0;
+      const isEmpty = presCount === 0;
+      const created = m.createdAt ? new Date(m.createdAt).toLocaleDateString('tr-TR') : '—';
+      const safeTitle = ((m.title || code) + '').replace(/</g, '&lt;');
+      const safeOwner = ((m.ownerName || '—') + '').replace(/</g, '&lt;');
+      return '<div class="public-room-row">' +
+        '<div class="pr-info">' +
+          '<div class="pr-title">' + safeTitle + (isEmpty ? '<span class="admin-empty-tag">BOŞ</span>' : '') + '</div>' +
+          '<div class="pr-meta">' + code + ' · ' + safeOwner + ' · ' + presCount + ' kişi · ' + created + '</div>' +
+        '</div>' +
+        '<button type="button" class="admin-del-btn" onclick="adminDeleteRoom(' + JSON.stringify(code) + ')">🗑️ Sil</button>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  function adminDeleteRoom(code){
+    if(!db || !code) return;
+    if(!confirm('"' + code + '" kodlu odayı kalıcı olarak silmek istiyor musun? Bu işlem geri alınamaz.')) return;
+    Promise.all([
+      db.ref('rooms/' + code).remove(),
+      db.ref('publicRooms/' + code).remove().catch(() => {})
+    ]).then(() => {
+      if(adminRoomsData) delete adminRoomsData[code];
+      adminUpdateCounts();
+      adminRenderList();
+    }).catch(() => alert('Silinemedi — yetki kontrolü başarısız oldu (admins/uid rules doğru ayarlanmış mı?).'));
+  }
+
+  function adminCleanupEmpty(){
+    if(!adminRoomsData) return;
+    const emptyCodes = Object.keys(adminRoomsData).filter(c => {
+      const room = adminRoomsData[c] || {};
+      return !room.presence || !Object.keys(room.presence).length;
+    });
+    if(!emptyCodes.length){ alert('Temizlenecek boş oda yok 🎉'); return; }
+    if(!confirm(emptyCodes.length + ' boş oda kalıcı olarak silinecek. Emin misin? Bu işlem geri alınamaz.')) return;
+    Promise.all(emptyCodes.reduce((acc, code) => {
+      acc.push(db.ref('rooms/' + code).remove());
+      acc.push(db.ref('publicRooms/' + code).remove().catch(() => {}));
+      return acc;
+    }, [])).then(() => {
+      emptyCodes.forEach(code => { if(adminRoomsData) delete adminRoomsData[code]; });
+      adminUpdateCounts();
+      adminRenderList();
+    }).catch(() => alert('Bazı odalar silinemedi — sayfayı yenileyip tekrar dene.'));
   }
 </script>
 
