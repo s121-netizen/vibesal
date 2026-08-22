@@ -1743,7 +1743,14 @@
   }
   .chat-msg-row.me{ justify-content:flex-end; }
   .chat-msg-row .reply-icon{
-    position:absolute; top:50%; transform:translateY(-50%);
+    /* ÖNEMLİ: eskiden position:absolute + top:50% kullanılıyordu. Bu, ikonları
+       flex akışından tamamen çıkarıp ikisini de (yanıtla ↩ ve sustur 🔇)
+       balonun tam üstüne, birbirinin üstüne bindiriyordu — hem mesaj metni
+       ikonların altında kalıp görünmüyordu hem de tıklamalar hep en üstteki
+       ikona gidip "yanıtla" hiç tıklanamıyordu. Artık normal bir flex öğesi:
+       satırdaki align-items:center zaten dikeyde ortalıyor, order/margin
+       kuralları da baloncuğun yanına, üst üste binmeden yerleştiriyor. */
+    position:static;
     width:26px; height:26px; border-radius:50%;
     background: var(--bg-soft); border:1px solid var(--stroke);
     color: var(--ink-dim); font-size:13px;
@@ -1752,10 +1759,9 @@
     flex-shrink:0;
   }
   /* Masaüstünde zarif bir "hover'da belir" davranışı — ama SADECE gerçek
-     hover desteği olan cihazlarda (fare). Bu kural olmadan ikonlar opacity:0
-     ile başlayıp yalnızca :hover ile göründüğü için dokunmatik/mobil
-     cihazlarda (hover diye bir şey olmadığından) hem yanıtla hem susturma
-     ikonu görünmez ve bulunamaz hale geliyordu. */
+     hover desteği olan cihazlarda (fare). Dokunmatik/mobil cihazlarda
+     (hover diye bir şey olmadığından) ikonlar her zaman tam opak kalır,
+     böylece hem yanıtla hem susturma ikonu her zaman görünür ve bulunabilir. */
   @media (hover:hover){
     .chat-msg-row .reply-icon{ opacity:.4; }
     .chat-msg-row:hover .reply-icon{ opacity:1; }
@@ -6102,9 +6108,12 @@ function toggleChatDrawer(){
     roomRef.child('messages').limitToLast(200).on('child_added', snap => {
       const m = snap.val();
       appendChatMessage(m, snap.key);
-      if(!chatDrawerOpen && !chatMuted && m && m.name !== USER_NAME && !isUserBlocked(m.name)){
-        unreadChatCount++;
-        updateChatBadge();
+      if(!chatMuted && m && m.name !== USER_NAME && !isUserBlocked(m.name)){
+        if(!chatDrawerOpen){
+          unreadChatCount++;
+          updateChatBadge();
+        }
+        playChatNotifSound();
       }
     });
   }
@@ -6140,6 +6149,42 @@ function toggleChatDrawer(){
         btn.title = blocked ? (name + ' susturmasını kaldır') : (name + ' kişisini sustur');
       }
     });
+  }
+
+  // ---------- Bildirim sesi ----------
+  // Dışarıdan bir mp3 dosyasına bağımlı olmamak için kısa bir "ding" sesini
+  // Web Audio API ile anında üretiyoruz. Tarayıcılar kullanıcı bir kez
+  // sayfayla etkileşime geçmeden ses çalınmasına izin vermez; bu yüzden
+  // AudioContext'i ilk tıklama/dokunuşta oluşturup "unlock" ediyoruz.
+  let notifAudioCtx = null;
+  function unlockNotifAudio(){
+    if(notifAudioCtx) return;
+    try{
+      notifAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }catch(e){}
+  }
+  document.addEventListener('pointerdown', unlockNotifAudio, { once:true });
+  document.addEventListener('keydown', unlockNotifAudio, { once:true });
+
+  function playChatNotifSound(){
+    try{
+      unlockNotifAudio();
+      if(!notifAudioCtx) return;
+      if(notifAudioCtx.state === 'suspended') notifAudioCtx.resume();
+      const now = notifAudioCtx.currentTime;
+      const osc = notifAudioCtx.createOscillator();
+      const gain = notifAudioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(1320, now + 0.09);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.22, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
+      osc.connect(gain);
+      gain.connect(notifAudioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.34);
+    }catch(e){}
   }
 
   // ---------- Sessize alma ----------
