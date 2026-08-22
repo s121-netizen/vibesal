@@ -1732,6 +1732,12 @@
     text-transform:uppercase; letter-spacing:.03em;
   }
   .chat-msg.me .chat-msg-name{ color: rgba(255,255,255,.85); }
+  .chat-msg-status{
+    display:block; text-align:right; margin-top:3px;
+    font-size:10px; letter-spacing:.02em;
+    color: rgba(255,255,255,.55);
+  }
+  .chat-msg-status.read{ color:#fff; font-weight:700; }
 
   /* WhatsApp-style: swipe or tap-icon to reply */
   .chat-msg-row{
@@ -3322,15 +3328,15 @@
         </div>
         <div class="xox-status" id="pgStatus">Başlamak için butona bas</div>
         <div style="display:flex;justify-content:center;">
-          <canvas id="pgCanvas" width="260" height="400"
-            style="background:linear-gradient(180deg,#1c1730,#100c1f);border-radius:16px;border:1px solid var(--stroke);width:100%;max-width:260px;height:auto;aspect-ratio:260/400;touch-action:none;cursor:pointer;display:block;"
+          <canvas id="pgCanvas" width="280" height="440"
+            style="background:linear-gradient(180deg,#1c1730,#100c1f);border-radius:16px;border:1px solid var(--stroke);width:100%;max-width:280px;height:auto;aspect-ratio:280/440;touch-action:none;cursor:pointer;display:block;"
           ></canvas>
         </div>
         <div class="xox-actions" style="justify-content:center;margin-top:16px;">
           <button class="reset-btn" onclick="startPongRound()">▶️ Başlat / Yeni Tur</button>
           <button class="reset-btn ghost" onclick="resetPongScore()">♻️ Skoru Sıfırla</button>
         </div>
-        <div style="font-size:11.5px;color:var(--ink-faint);margin-top:10px;">Raketini oynatmak için tuval üzerinde yukarı/aşağı sürükle (bilgisayarda ok tuşları da çalışır) · 7 sayıya ilk ulaşan kazanır</div>
+        <div style="font-size:11.5px;color:var(--ink-faint);margin-top:10px;">Raketini oynatmak için tuval üzerinde yukarı/aşağı sürükle (bilgisayarda ok tuşları da çalışır) · 3-2-1 geri sayımdan sonra top atılır · her vuruşta hızlanır · 7 sayıya ilk ulaşan kazanır</div>
       </div>
     </section>
 
@@ -4288,6 +4294,7 @@
     initVideoSync();
     initDrawSync();
     initLiveChatSync();
+    initChatReadsSync();
     initEmojiSync();
     initEmojiGuessSync();
     initRpsSync();
@@ -4565,8 +4572,8 @@
     if(prevView === 'reaction' && name !== 'reaction' && typeof rxCancel === 'function') rxCancel();
     if(prevView === 'sn' && name !== 'sn' && typeof snakeStopLoop === 'function') snakeStopLoop();
     if(name === 'sn' && typeof snakeMaybeStartLoop === 'function') snakeMaybeStartLoop();
-    if(prevView === 'pong' && name !== 'pong' && typeof pgStopLoop === 'function') pgStopLoop();
-    if(name === 'pong' && typeof pgMaybeStartLoop === 'function') pgMaybeStartLoop();
+    if(prevView === 'pong' && name !== 'pong' && typeof pgOwnerStopLoop === 'function') pgOwnerStopLoop();
+    if(name === 'pong' && typeof pgOwnerStartLoop === 'function') pgOwnerStartLoop();
     if(name === 'pong' && typeof pgEnterView === 'function') pgEnterView();
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     section.classList.add('active');
@@ -5909,6 +5916,14 @@
   let chatDrawerOpen = false;
   let unreadChatCount = 0;
   let liveChatListenerAttached = false;
+  // "Okundu" bilgisi: her katılımcı roomRef.child('chatReads/<presenceId>') altına
+  // en son gördüğü mesajın anahtarını yazar. Firebase push-anahtarları zaman
+  // sırasına göre karakter karakter sıralanabilir olduğundan, "partnerin son
+  // okuduğu anahtar >= bu mesajın anahtarı" karşılaştırması, o mesajdan ÖNCEKİ
+  // her mesajın da okunmuş sayılması için yeterlidir — mesaj başına ayrı bir
+  // okundu bayrağı tutmaya gerek kalmaz.
+  let chatReadsAll = {};
+  let lastChatMsgKey = null;
 
   // PC hızlı chat kısayolu: C tuşu ile aç/kapat.
   document.addEventListener('keydown', (e) => {
@@ -5940,7 +5955,42 @@ function toggleChatDrawer(){
       const body = document.getElementById('chatDrawerBody');
       body.scrollTop = body.scrollHeight;
       setTimeout(() => { const inp = document.getElementById('chatMsgInput'); if(inp) inp.focus(); }, 80);
+      // Sohbeti açtığında o ana kadarki tüm mesajlar "görülmüş" sayılır.
+      if(lastChatMsgKey) markChatRead(lastChatMsgKey);
     }
+  }
+
+  // ---------- Okundu bilgisi ----------
+  function markChatRead(key){
+    if(!roomRef || !myPresenceId || !key) return;
+    roomRef.child('chatReads/' + myPresenceId).set({ key: key, ts: Date.now() }).catch(() => {});
+  }
+
+  function initChatReadsSync(){
+    if(!roomRef) return;
+    roomRef.child('chatReads').on('value', snap => {
+      chatReadsAll = snap.val() || {};
+      updateAllChatReadStatuses();
+    });
+  }
+
+  function updateReadStatusForRow(row, key){
+    if(!row || !key) return;
+    const statusEl = row.querySelector('.chat-msg-status');
+    if(!statusEl) return;
+    const readByOther = Object.keys(chatReadsAll).some(id => {
+      if(id === myPresenceId) return false;
+      const r = chatReadsAll[id];
+      return r && r.key && r.key >= key;
+    });
+    statusEl.textContent = readByOther ? '✓✓ Okundu' : '✓ Gönderildi';
+    statusEl.classList.toggle('read', readByOther);
+  }
+
+  function updateAllChatReadStatuses(){
+    document.querySelectorAll('.chat-msg-row.me[data-msg-key]').forEach(row => {
+      updateReadStatusForRow(row, row.dataset.msgKey);
+    });
   }
 
   function updateChatBadge(){
@@ -5990,6 +6040,17 @@ function toggleChatDrawer(){
     row.appendChild(bubble);
     row.appendChild(replyIcon);
 
+    // Kendi mesajlarımızın altına "✓ Gönderildi / ✓✓ Okundu" durumu ekleriz.
+    // Başlangıç metni "Gönderildi" — chatReads senkronundan gelen mevcut veriyle
+    // (aşağıda updateReadStatusForRow çağrısıyla) hemen güncellenir.
+    let statusEl = null;
+    if(isMe){
+      statusEl = document.createElement('span');
+      statusEl.className = 'chat-msg-status';
+      statusEl.textContent = '✓ Gönderildi';
+      bubble.appendChild(statusEl);
+    }
+
     // Karşı tarafı sessize alma ikonu — yalnızca başkasının mesajlarında görünür.
     // Bu tamamen YEREL bir görünürlük ayarıdır: mesaj her zaman Firebase'e normal
     // şekilde gönderilmeye devam eder, susturulan kişi susturulduğunu asla görmez —
@@ -6017,6 +6078,7 @@ function toggleChatDrawer(){
     body.appendChild(row);
     body.scrollTop = body.scrollHeight;
 
+    if(isMe && key) updateReadStatusForRow(row, key);
     attachSwipeToReply(row, key, m);
     const quoteEl = bubble.querySelector('.chat-quote');
     if(quoteEl){
@@ -6108,6 +6170,10 @@ function toggleChatDrawer(){
     roomRef.child('messages').limitToLast(200).on('child_added', snap => {
       const m = snap.val();
       appendChatMessage(m, snap.key);
+      lastChatMsgKey = snap.key;
+      // Sohbet zaten açıksa, gelen (ya da geçmişten yüklenen) her mesaj anında
+      // "görüldü" sayılır ve karşı tarafa okundu bilgisi gönderilir.
+      if(chatDrawerOpen) markChatRead(snap.key);
       if(!chatMuted && m && m.name !== USER_NAME && !isUserBlocked(m.name)){
         if(!chatDrawerOpen){
           unreadChatCount++;
@@ -9829,59 +9895,76 @@ function toggleChatDrawer(){
   }
 
   // ==================================================================
-  // PONG — iki kişilik gerçek zamanlı klasik pong. Snake VS ile aynı
-  // "oda sahibi otorite" desenini kullanır.
+  // ==================================================================
+  // PONG — sıfırdan yazıldı. İki kişilik gerçek zamanlı klasik pong.
   //
-  // ÖNEMLİ MİMARİ NOT: Top/skor/durum ("pg/game") ve raket konumları
-  // ("pg/paddleY") KASITLI OLARAK AYRI Firebase path'lerinde tutulur ve
-  // AYRI 'on value' dinleyicileriyle izlenir. Daha önce ikisi tek bir
-  // "pg" düğümünde birleşikken, bir oyuncu raketini sürükledikçe (yani
-  // pg/paddleY/<rol> her değiştiğinde) üst düğümdeki TEK dinleyici de
-  // tetikleniyor, bu da topun render/interpolasyon mantığını gereksiz
-  // yere yeniden çalıştırıp topun ekranda "ortaya sıçraması" bugına yol
-  // açıyordu. İki path'i ayırmak bu ihtimali kökten ortadan kaldırır:
-  // raket yazıları artık top dinleyicisine hiç dokunmuyor.
-  const PONG_W = 260, PONG_H = 400, PONG_PADDLE_H = 64, PONG_PADDLE_W = 10, PONG_BALL_R = 7;
-  const PONG_PADDLE_MARGIN = 10, PONG_WIN_SCORE = 7, PONG_TICK_MS = 33;
-  let myPgRole = null;
-  let pgGame = null;      // { status, ball, score, winner } — roomRef.child('pg/game')
-  let pgPaddleY = { A: (PONG_H - PONG_PADDLE_H) / 2, B: (PONG_H - PONG_PADDLE_H) / 2 }; // roomRef.child('pg/paddleY')
-  let pgLoopTimer = null;
-  // Ekranda gösterilen top konumu, sunucudan gelen state'i doğrudan değil
-  // requestAnimationFrame ile YUMUŞAK biçimde takip eder (interpolasyon).
-  // Bunsuz top, ağdan her yeni değer geldiğinde (40ms'de bir, değişken
-  // gecikmeyle) sıçrayarak ilerliyordu — asıl "buglu" görünmenin sebebi buydu.
-  let pgDisplayBall = { x: PONG_W / 2, y: PONG_H / 2 };
-  let pgAnimRunning = false;
-  // Son karenin çizildiği zaman damgası — animasyon döngüsü "çalışıyor"
-  // sanılıp aslında (ör. arka planda kısılan bir requestAnimationFrame
-  // yüzünden) donmuş kalırsa bunu tespit edip döngüyü zorla yeniden
-  // başlatmak için kullanılır (bkz. pgStartAnimIfNeeded).
-  let pgLastFrameTs = 0;
+  // Mimari (kasıtlı tasarım kararları):
+  // 1) Sadece ODA SAHİBİ (IS_OWNER) fizik hesaplar ve 'pg/game' düğümüne
+  //    yazar — böylece iki taraf da farklı bir top pozisyonu hesaplayıp
+  //    çatışmaz; tek "gerçek" durum kaynağı vardır.
+  // 2) Raket pozisyonları ('pg/paddleY') top/skor durumundan ('pg/game')
+  //    AYRI bir Firebase düğümünde tutulur. Raketini sürüklerken bu ayrı
+  //    düğüme yazman, karşı tarafın top-interpolasyon dinleyicisini
+  //    GEREKSİZ yere tetiklemez — aksi halde top ekranda sıçrar.
+  // 3) Ekranda gösterilen top, sunucudan gelen ham veriyi değil, her
+  //    animasyon karesinde hedefe doğru yumuşakça kayan interpole bir
+  //    kopyasını (pgView.ball) izler — 30ms'lik ağ adımları arasında
+  //    akıcı hareket illüzyonu yaratır.
+  // 4) Çarpışma/sayı/geri sayım gibi anlık OLAYLAR ayrı bir path yerine
+  //    'pg/game.evt = {type, seq}' üzerinden taşınır; her istemci son
+  //    gördüğü seq'i saklayıp yeni bir seq gördüğünde bununla eşleşen
+  //    sesi bir kez çalar — böylece iki taraf da aynı anda "pat" sesini
+  //    duyar, sahibi olmayan taraf da dahil.
+  // ==================================================================
 
-  function pgResetBall(dir){
-    const angle = (Math.random() * 0.6 - 0.3);
-    const speed = 4;
+  const PG = {
+    W: 280, H: 440,
+    PADDLE_W: 10, PADDLE_H: 66, PADDLE_MARGIN: 12,
+    BALL_R: 7,
+    WIN_SCORE: 7,
+    TICK_MS: 30,
+    BASE_SPEED: 4.4,
+    MAX_SPEED: 11,
+    SPEED_UP: 1.045,
+    COUNTDOWN_FROM: 3
+  };
+
+  let myPgRole = null;          // 'A' | 'B' | null (izleyici)
+  let pgGame = null;            // roomRef.child('pg/game') → {status,ball,score,winner,evt,countdown}
+  let pgPaddleY = pgFreshPaddles();  // roomRef.child('pg/paddleY') → {A,B}
+  let pgOwnerLoop = null;       // sadece sahipte: fizik tick'i
+  let pgOwnerCountdown = null;  // sadece sahipte: geri sayım tick'i
+  let pgLastEvtSeq = 0;         // son çalınan ses olayının seq'i (çift çalmayı önler)
+
+  // Görüntülenen (interpole edilmiş) top — animasyon çerçevesi bunu günceller.
+  const pgView = { ball: { x: PG.W / 2, y: PG.H / 2 }, animId: null, lastTs: 0 };
+
+  function pgFreshPaddles(){
+    return { A: (PG.H - PG.PADDLE_H) / 2, B: (PG.H - PG.PADDLE_H) / 2 };
+  }
+
+  function pgFreshBall(dir){
+    // Servisi çok dikey olmayan, hafif rastgele bir açıyla başlatır.
+    const angle = (Math.random() * 0.7 - 0.35);
     return {
-      x: PONG_W / 2, y: PONG_H / 2,
-      vx: Math.cos(angle) * speed * dir,
-      vy: Math.sin(angle) * speed
+      x: PG.W / 2, y: PG.H / 2,
+      vx: Math.cos(angle) * PG.BASE_SPEED * dir,
+      vy: Math.sin(angle) * PG.BASE_SPEED
     };
   }
 
-  function pgInitialGame(prevScore){
+  function pgFreshGame(prevScore){
     return {
       status: 'idle',
-      ball: pgResetBall(Math.random() < 0.5 ? 1 : -1),
+      ball: pgFreshBall(Math.random() < 0.5 ? 1 : -1),
       score: prevScore || { A: 0, B: 0 },
-      winner: null
+      winner: null,
+      countdown: 0,
+      evt: { type: null, seq: (prevScore && prevScore.__seq) || 0 }
     };
   }
 
-  function pgInitialPaddleY(){
-    return { A: (PONG_H - PONG_PADDLE_H) / 2, B: (PONG_H - PONG_PADDLE_H) / 2 };
-  }
-
+  // ---------- Rol etiketi ----------
   function updatePgRoleLabel(){
     const el = document.getElementById('pgRole');
     if(!el) return;
@@ -9890,89 +9973,92 @@ function toggleChatDrawer(){
       : 'İzleyicisin — iki oyuncu zaten dolu.';
   }
 
+  // ---------- Firebase senkron ----------
   function initPgSync(){
-    // TOP / SKOR / DURUM — sadece bu path değiştiğinde tetiklenir. Raket
-    // sürüklemesi bu path'e hiç yazmadığı için bu dinleyiciyi ASLA tetiklemez.
     roomRef.child('pg/game').on('value', snap => {
-      pgGame = snap.val();
-      pgStartAnimIfNeeded();
-      updatePgScoreLabel();
-      updatePgStatus();
-      if(pgGame && pgGame.status === 'playing') pgMaybeStartLoop();
+      const next = snap.val();
+      pgHandleIncomingGame(next);
     });
-    // RAKETLER — tamamen ayrı path. Sadece raket çizimini günceller, top
-    // animasyonuna/interpolasyonuna hiç dokunmaz.
     roomRef.child('pg/paddleY').on('value', snap => {
-      pgPaddleY = snap.val() || pgInitialPaddleY();
-      renderPong();
+      pgPaddleY = snap.val() || pgFreshPaddles();
+      pgRender();
     });
   }
 
-  // Görünen topu her animasyon karesinde (60fps) sunucudaki hedefe doğru
-  // hafifçe kaydırır ve tuvali yeniden çizer — 40ms'lik ağ adımları arasında
-  // akıcı bir hareket illüzyonu yaratır (basit lineer interpolasyon).
-  function pgStartAnimIfNeeded(){
-    // Döngü zaten çalışıyor GİBİ görünse bile, son karenin üzerinden 500ms'den
-    // fazla geçtiyse gerçekte donmuş demektir (2. oyuncuda topun ekranın
-    // ortasında sabit kalması bugının kök nedeni buydu: 'pg/game' verisi
-    // Firebase'den değişmeye devam ediyor ama requestAnimationFrame döngüsü bir
-    // şekilde (arka plana atma, view henüz aktif değilken erken çıkış vb.)
-    // yeniden zincirlenmemişti; pgAnimRunning=true kaldığı için de bir daha asla
-    // yeniden başlamıyordu). Bu durumda bayrağı sıfırlayıp döngüyü zorla
-    // yeniden kuruyoruz.
-    if(pgAnimRunning){
-      if(!pgLastFrameTs || (performance.now() - pgLastFrameTs) < 500) return;
-      pgAnimRunning = false;
+  function pgHandleIncomingGame(next){
+    const prevEvtSeq = pgGame && pgGame.evt ? pgGame.evt.seq : 0;
+    pgGame = next;
+    pgUpdateScoreLabel();
+    pgUpdateStatusLabel();
+
+    // Yeni bir ses olayı geldiyse (sahip dahil HERKES) bir kez çal.
+    if(pgGame && pgGame.evt && pgGame.evt.type && pgGame.evt.seq !== undefined && pgGame.evt.seq !== pgLastEvtSeq && pgGame.evt.seq !== prevEvtSeq){
+      pgLastEvtSeq = pgGame.evt.seq;
+      pgPlaySound(pgGame.evt.type);
     }
-    pgAnimRunning = true;
-    const step = () => {
-      pgLastFrameTs = performance.now();
+
+    if(pgGame && pgGame.ball && !pgView.animId){
+      // Animasyon dururken (görünüm henüz aktif değilken vb.) topu direkt hizala.
+      pgView.ball = { x: pgGame.ball.x, y: pgGame.ball.y };
+    }
+    pgEnsureAnim();
+
+    // Sadece sahip: oyun 'playing' ise fizik döngüsünü, 'countdown' ise
+    // geri sayım döngüsünü (henüz kimse başlatmadıysa) çalıştırır.
+    if(IS_OWNER){
+      if(pgGame && pgGame.status === 'playing') pgOwnerStartLoop();
+      else pgOwnerStopLoop();
+      if(pgGame && pgGame.status === 'countdown') pgOwnerStartCountdown();
+    }
+  }
+
+  // ---------- Görsel katman: interpolasyon + çizim ----------
+  function pgEnsureAnim(){
+    if(pgView.animId) return;
+    const step = (ts) => {
       const view = document.getElementById('view-pong');
-      if(!pgGame || !view || !view.classList.contains('active')){ pgAnimRunning = false; return; }
-      const target = pgGame.ball || pgDisplayBall;
-      const dx = target.x - pgDisplayBall.x;
-      const dy = target.y - pgDisplayBall.y;
-      if(Math.abs(dx) > 60 || Math.abs(dy) > 60){
-        // Top sıfırlandı / çok uzaklaştı — sekmeyi taklit etmeden direkt hizala.
-        pgDisplayBall = { x: target.x, y: target.y };
+      if(!pgGame || !view || !view.classList.contains('active')){ pgView.animId = null; return; }
+      const target = pgGame.ball || pgView.ball;
+      const dx = target.x - pgView.ball.x;
+      const dy = target.y - pgView.ball.y;
+      if(Math.abs(dx) > 70 || Math.abs(dy) > 70){
+        pgView.ball = { x: target.x, y: target.y }; // büyük sıçrama = sayı sonrası reset, direkt hizala
       } else {
-        pgDisplayBall = { x: pgDisplayBall.x + dx * 0.35, y: pgDisplayBall.y + dy * 0.35 };
+        pgView.ball = { x: pgView.ball.x + dx * 0.4, y: pgView.ball.y + dy * 0.4 };
       }
-      renderPong();
-      if(pgGame.status === 'playing' || Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5){
-        requestAnimationFrame(step);
-      } else {
-        pgAnimRunning = false;
-      }
+      pgRender();
+      pgView.animId = requestAnimationFrame(step);
     };
-    requestAnimationFrame(step);
+    pgView.animId = requestAnimationFrame(step);
   }
 
-  // Pong görünümüne her girildiğinde (kendi tıklamanla ya da partnerinle
-  // senkron gezinme yüzünden) çağrılır. Topu ağdan bir sonraki tick'i
-  // beklemeden ANINDA sunucudaki gerçek konuma hizalar ve animasyon
-  // döngüsünü (gerekiyorsa donmuş bayrağı temizleyerek) yeniden tetikler —
-  // böylece 2. oyuncu tuvale girdiğinde top asla "sabit" görünmez.
+  // Pong görünümüne her girişte (kendi tıklamanla ya da partnerinle
+  // senkron gezinmeyle) çağrılır — topu anında gerçek konuma hizalar ve
+  // animasyon döngüsünü tazeler.
   function pgEnterView(){
-    if(pgGame && pgGame.ball) pgDisplayBall = { x: pgGame.ball.x, y: pgGame.ball.y };
-    renderPong();
-    pgAnimRunning = false;
-    pgStartAnimIfNeeded();
+    if(pgGame && pgGame.ball) pgView.ball = { x: pgGame.ball.x, y: pgGame.ball.y };
+    pgRender();
+    pgView.animId = null;
+    pgEnsureAnim();
   }
 
-  function updatePgScoreLabel(){
-    const aEl = document.getElementById('pgScoreA');
-    const bEl = document.getElementById('pgScoreB');
+  function pgUpdateScoreLabel(){
+    const a = document.getElementById('pgScoreA');
+    const b = document.getElementById('pgScoreB');
     const score = (pgGame && pgGame.score) || { A: 0, B: 0 };
-    if(aEl) aEl.textContent = score.A || 0;
-    if(bEl) bEl.textContent = score.B || 0;
+    if(a) a.textContent = score.A || 0;
+    if(b) b.textContent = score.B || 0;
   }
 
-  function updatePgStatus(){
+  function pgUpdateStatusLabel(){
     const el = document.getElementById('pgStatus');
     if(!el) return;
     if(!pgGame || pgGame.status === 'idle'){
       el.textContent = 'Başlamak için "Başlat / Yeni Tur"a bas';
+      return;
+    }
+    if(pgGame.status === 'countdown'){
+      el.textContent = (pgGame.countdown > 0 ? pgGame.countdown : 'Başla!') + ' 🏓';
       return;
     }
     if(pgGame.status === 'over'){
@@ -9980,45 +10066,107 @@ function toggleChatDrawer(){
       return;
     }
     if(!myPgRole){ el.textContent = 'İzleyicisin — iki oyuncu zaten dolu.'; return; }
-    el.textContent = 'Raketini sürükle — 7 sayıya ilk ulaşan kazanır!';
+    el.textContent = 'Raketini sürükle — ' + PG.WIN_SCORE + ' sayıya ilk ulaşan kazanır!';
   }
 
-  function renderPong(){
+  function pgRender(){
     const canvas = document.getElementById('pgCanvas');
     if(!canvas || !canvas.getContext) return;
     const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, PONG_W, PONG_H);
-    ctx.strokeStyle = 'rgba(255,255,255,.15)';
-    ctx.setLineDash([6, 8]);
-    ctx.beginPath(); ctx.moveTo(PONG_W / 2, 0); ctx.lineTo(PONG_W / 2, PONG_H); ctx.stroke();
+    ctx.clearRect(0, 0, PG.W, PG.H);
+
+    // Orta çizgi
+    ctx.strokeStyle = 'rgba(255,255,255,.14)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([7, 9]);
+    ctx.beginPath(); ctx.moveTo(PG.W / 2, 0); ctx.lineTo(PG.W / 2, PG.H); ctx.stroke();
     ctx.setLineDash([]);
 
-    const paddleY = pgPaddleY || pgInitialPaddleY();
-    ctx.fillStyle = '#8b5cf6';
-    ctx.fillRect(PONG_PADDLE_MARGIN, paddleY.A, PONG_PADDLE_W, PONG_PADDLE_H);
-    ctx.fillStyle = '#f472b6';
-    ctx.fillRect(PONG_W - PONG_PADDLE_MARGIN - PONG_PADDLE_W, paddleY.B, PONG_PADDLE_W, PONG_PADDLE_H);
+    const paddleY = pgPaddleY || pgFreshPaddles();
 
+    // Raket A (mor, sol) — hafif parlama
+    ctx.fillStyle = '#8b5cf6';
+    pgRoundRect(ctx, PG.PADDLE_MARGIN, paddleY.A, PG.PADDLE_W, PG.PADDLE_H, 4);
+    ctx.fill();
+
+    // Raket B (pembe, sağ)
+    ctx.fillStyle = '#f472b6';
+    pgRoundRect(ctx, PG.W - PG.PADDLE_MARGIN - PG.PADDLE_W, paddleY.B, PG.PADDLE_W, PG.PADDLE_H, 4);
+    ctx.fill();
+
+    // Top — hafif parlama efekti
+    const bx = pgView.ball.x, by = pgView.ball.y;
+    const glow = ctx.createRadialGradient(bx, by, 0, bx, by, PG.BALL_R * 3);
+    glow.addColorStop(0, 'rgba(244,196,48,.55)');
+    glow.addColorStop(1, 'rgba(244,196,48,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(bx, by, PG.BALL_R * 3, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#f4c430';
-    ctx.beginPath(); ctx.arc(pgDisplayBall.x, pgDisplayBall.y, PONG_BALL_R, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bx, by, PG.BALL_R, 0, Math.PI * 2); ctx.fill();
+
+    // Geri sayım overlay
+    if(pgGame && pgGame.status === 'countdown'){
+      ctx.fillStyle = 'rgba(10,8,18,.45)';
+      ctx.fillRect(0, 0, PG.W, PG.H);
+      ctx.fillStyle = '#fff';
+      ctx.font = '700 54px Manrope, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(pgGame.countdown > 0 ? String(pgGame.countdown) : 'Başla!', PG.W / 2, PG.H / 2);
+    }
   }
 
-  // Raketi doğrudan bir Y konumuna (raketin ÜST kenarı) taşır — sürüklerken kullanılır.
+  function pgRoundRect(ctx, x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // ---------- Ses efektleri (bildirim sesiyle aynı paylaşılan AudioContext) ----------
+  function pgPlaySound(type){
+    try{
+      unlockNotifAudio();
+      if(!notifAudioCtx) return;
+      if(notifAudioCtx.state === 'suspended') notifAudioCtx.resume();
+      if(type === 'wall') pgTone(520, 0.06, 0.09);
+      else if(type === 'paddle') pgTone(300, 0.10, 0.12);
+      else if(type === 'score') { pgTone(660, 0.10, 0.16); setTimeout(() => pgTone(880, 0.14, 0.16), 90); }
+      else if(type === 'countdown') pgTone(440, 0.07, 0.1);
+      else if(type === 'go') pgTone(1040, 0.12, 0.18);
+    }catch(e){}
+  }
+
+  function pgTone(freq, dur, vol){
+    const ctxA = notifAudioCtx;
+    const now = ctxA.currentTime;
+    const osc = ctxA.createOscillator();
+    const gain = ctxA.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(vol, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    osc.connect(gain); gain.connect(ctxA.destination);
+    osc.start(now); osc.stop(now + dur + 0.02);
+  }
+
+  // ---------- Raket kontrolü: fare/dokunma sürükleme ----------
   function pgSetPaddleY(y){
     if(!roomRef || !myPgRole) return;
     if(!pgGame || pgGame.status !== 'playing') return;
-    const clamped = Math.max(0, Math.min(PONG_H - PONG_PADDLE_H, y));
-    // Kendi raketimizi Firebase round-trip'ini beklemeden ANINDA çiz —
-    // mobilde sürüklemeyi çok daha akıcı hissettirir.
+    const clamped = Math.max(0, Math.min(PG.H - PG.PADDLE_H, y));
+    // Kendi raketimizi ağ gecikmesini beklemeden anında yerel çiz.
     pgPaddleY = Object.assign({}, pgPaddleY, { [myPgRole]: clamped });
-    renderPong();
+    pgRender();
     roomRef.child('pg/paddleY/' + myPgRole).set(clamped);
   }
 
-  // Ok tuşlarıyla sabit adım kaydırma (klavye desteği).
   function pgNudgePaddle(delta){
     if(!myPgRole || !pgGame) return;
-    const current = (pgPaddleY && pgPaddleY[myPgRole]) || (PONG_H - PONG_PADDLE_H) / 2;
+    const current = (pgPaddleY && pgPaddleY[myPgRole]) || (PG.H - PG.PADDLE_H) / 2;
     pgSetPaddleY(current + delta);
   }
 
@@ -10026,21 +10174,17 @@ function toggleChatDrawer(){
   let pgPendingY = null;
   let pgWriteTimer = null;
 
-  function pgCanvasPointer(e){
-    if(!myPgRole) return;
+  function pgPointerToY(e){
     const canvas = document.getElementById('pgCanvas');
-    if(!canvas) return;
+    if(!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     const clientY = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
-    const scaleY = PONG_H / rect.height;
-    const relY = (clientY - rect.top) * scaleY;
-    pgQueuePaddleY(relY - PONG_PADDLE_H / 2);
+    const scaleY = PG.H / rect.height;
+    return (clientY - rect.top) * scaleY - PG.PADDLE_H / 2;
   }
 
-  // Firebase'e her pointermove'da (mobilde saniyede 60-120 kez) doğrudan yazmak
-  // yerine, en güncel hedefi biriktirip ~30ms'de bir gönderiyoruz. (Kendi
-  // raketimiz zaten pgSetPaddleY içinde anında yerel olarak çiziliyor; bu
-  // throttle sadece ağa giden yazı sayısını azaltıyor.)
+  // Firebase'e her hareket olayında değil, ~30ms'de bir yazar (kendi
+  // raketimiz zaten anında yerel çiziliyor — bu sadece ağ trafiğini azaltır).
   function pgQueuePaddleY(y){
     pgPendingY = y;
     if(pgWriteTimer) return;
@@ -10050,11 +10194,6 @@ function toggleChatDrawer(){
     }, 30);
   }
 
-  // Mobilde dokunarak sürükleme güvenilir çalışsın diye Pointer Events'i
-  // "event.buttons" kontrolüne değil, pointerdown/up ile açılıp kapanan bir
-  // bayrağa ve setPointerCapture'a dayandırıyoruz — çoğu mobil tarayıcıda
-  // touch kaynaklı PointerEvent'lerde "buttons" alanı güvenilir değil, bu
-  // yüzden eski kontrol mobilde sürüklemeyi hiç tetiklemiyordu.
   function initPgTouch(){
     const canvas = document.getElementById('pgCanvas');
     if(!canvas || canvas.dataset.pgWired) return;
@@ -10063,15 +10202,17 @@ function toggleChatDrawer(){
       if(!myPgRole) return;
       pgDragging = true;
       try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
-      pgCanvasPointer(e);
+      const y = pgPointerToY(e);
+      if(y !== null) pgQueuePaddleY(y);
       e.preventDefault();
     };
     const onMove = (e) => {
       if(!pgDragging) return;
-      pgCanvasPointer(e);
+      const y = pgPointerToY(e);
+      if(y !== null) pgQueuePaddleY(y);
       e.preventDefault();
     };
-    const onUp = (e) => {
+    const onUp = () => {
       pgDragging = false;
       pgPendingY = null;
       if(pgWriteTimer){ clearTimeout(pgWriteTimer); pgWriteTimer = null; }
@@ -10083,100 +10224,137 @@ function toggleChatDrawer(){
     canvas.addEventListener('pointerleave', (e) => { if(pgDragging) onUp(e); });
   }
 
-  // Sadece ODA SAHİBİ tarafından çağrılır — top fiziği, raket çarpışmaları ve sayı hesaplaması
-  // burada MERKEZİ olarak yapılıp update() ile 'pg/game' düğümüne yazılır.
-  // Raket konumları ('pg/paddleY') ayrı path olduğu için bu yazı ASLA raketleri ezmez
-  // ve raket yazıları da ASLA bu hesaplamayı/top verisini etkilemez.
+  // ---------- Fizik (SADECE oda sahibinde çalışır) ----------
   function pgComputeNext(game, paddleY){
     const ball = Object.assign({}, game.ball);
     paddleY = paddleY || { A: 0, B: 0 };
+    const prevEvtSeq = (game.evt && game.evt.seq) || 0;
+    let evt = null;
+
     ball.x += ball.vx;
     ball.y += ball.vy;
 
-    if(ball.y - PONG_BALL_R < 0){ ball.y = PONG_BALL_R; ball.vy = Math.abs(ball.vy); }
-    if(ball.y + PONG_BALL_R > PONG_H){ ball.y = PONG_H - PONG_BALL_R; ball.vy = -Math.abs(ball.vy); }
+    // üst/alt duvar sekmesi
+    if(ball.y - PG.BALL_R < 0){ ball.y = PG.BALL_R; ball.vy = Math.abs(ball.vy); evt = 'wall'; }
+    if(ball.y + PG.BALL_R > PG.H){ ball.y = PG.H - PG.BALL_R; ball.vy = -Math.abs(ball.vy); evt = 'wall'; }
 
-    // sol raket (A) çarpışması
-    if(ball.vx < 0 && ball.x - PONG_BALL_R <= PONG_PADDLE_MARGIN + PONG_PADDLE_W && ball.x - PONG_BALL_R >= PONG_PADDLE_MARGIN - 8){
-      if(ball.y >= paddleY.A - PONG_BALL_R && ball.y <= paddleY.A + PONG_PADDLE_H + PONG_BALL_R){
-        ball.x = PONG_PADDLE_MARGIN + PONG_PADDLE_W + PONG_BALL_R;
-        ball.vx = Math.abs(ball.vx) * 1.03;
-        const hitPos = (ball.y - (paddleY.A + PONG_PADDLE_H / 2)) / (PONG_PADDLE_H / 2);
-        ball.vy = hitPos * 5;
+    const capSpeed = (v) => Math.max(-PG.MAX_SPEED, Math.min(PG.MAX_SPEED, v));
+
+    // sol raket (A)
+    if(ball.vx < 0 && ball.x - PG.BALL_R <= PG.PADDLE_MARGIN + PG.PADDLE_W && ball.x - PG.BALL_R >= PG.PADDLE_MARGIN - 9){
+      if(ball.y >= paddleY.A - PG.BALL_R && ball.y <= paddleY.A + PG.PADDLE_H + PG.BALL_R){
+        ball.x = PG.PADDLE_MARGIN + PG.PADDLE_W + PG.BALL_R;
+        ball.vx = capSpeed(Math.abs(ball.vx) * PG.SPEED_UP);
+        const hitPos = (ball.y - (paddleY.A + PG.PADDLE_H / 2)) / (PG.PADDLE_H / 2);
+        ball.vy = capSpeed(hitPos * 5.2);
+        evt = 'paddle';
       }
     }
-    // sağ raket (B) çarpışması
-    const bLeftX = PONG_W - PONG_PADDLE_MARGIN - PONG_PADDLE_W;
-    if(ball.vx > 0 && ball.x + PONG_BALL_R >= bLeftX && ball.x + PONG_BALL_R <= bLeftX + PONG_PADDLE_W + 8){
-      if(ball.y >= paddleY.B - PONG_BALL_R && ball.y <= paddleY.B + PONG_PADDLE_H + PONG_BALL_R){
-        ball.x = bLeftX - PONG_BALL_R;
-        ball.vx = -Math.abs(ball.vx) * 1.03;
-        const hitPos = (ball.y - (paddleY.B + PONG_PADDLE_H / 2)) / (PONG_PADDLE_H / 2);
-        ball.vy = hitPos * 5;
+    // sağ raket (B)
+    const bLeftX = PG.W - PG.PADDLE_MARGIN - PG.PADDLE_W;
+    if(ball.vx > 0 && ball.x + PG.BALL_R >= bLeftX && ball.x + PG.BALL_R <= bLeftX + PG.PADDLE_W + 9){
+      if(ball.y >= paddleY.B - PG.BALL_R && ball.y <= paddleY.B + PG.PADDLE_H + PG.BALL_R){
+        ball.x = bLeftX - PG.BALL_R;
+        ball.vx = capSpeed(-Math.abs(ball.vx) * PG.SPEED_UP);
+        const hitPos = (ball.y - (paddleY.B + PG.PADDLE_H / 2)) / (PG.PADDLE_H / 2);
+        ball.vy = capSpeed(hitPos * 5.2);
+        evt = 'paddle';
       }
     }
 
     let scored = null;
-    if(ball.x < -20) scored = 'B';
-    else if(ball.x > PONG_W + 20) scored = 'A';
+    if(ball.x < -24) scored = 'B';
+    else if(ball.x > PG.W + 24) scored = 'A';
 
     if(scored){
       const score = Object.assign({ A: 0, B: 0 }, game.score);
       score[scored] = (score[scored] || 0) + 1;
-      const over = score[scored] >= PONG_WIN_SCORE;
-      return Object.assign({}, game, {
-        ball: pgResetBall(scored === 'A' ? -1 : 1),
-        score,
-        status: over ? 'over' : 'playing',
-        winner: over ? scored : null
-      });
+      const over = score[scored] >= PG.WIN_SCORE;
+      return {
+        ball: pgFreshBall(scored === 'A' ? -1 : 1),
+        score, status: over ? 'over' : 'playing', winner: over ? scored : null,
+        countdown: 0,
+        evt: { type: 'score', seq: prevEvtSeq + 1 }
+      };
     }
 
-    return Object.assign({}, game, { ball });
+    return {
+      ball, score: game.score, status: game.status, winner: game.winner, countdown: 0,
+      evt: evt ? { type: evt, seq: prevEvtSeq + 1 } : (game.evt || { type: null, seq: prevEvtSeq })
+    };
   }
 
-  function pgTick(){
+  function pgOwnerTick(){
     if(!roomRef || !IS_OWNER || !pgGame || pgGame.status !== 'playing') return;
-    // Not: Burada bilinçli olarak transaction() DEĞİL, tek yönlü bir okuma +
-    // hedefli update() kullanıyoruz. Sadece oda sahibi bu düğüme (top/skor)
-    // yazdığı için çakışma riski yok; transaction'ın her tick'te sunucuya gidip
-    // gelmesi (25-30 kez/sn) gecikme birikmesine ve topun "sıçrayarak" ilerlemesine
-    // yol açıyordu. 'pg/game' ve 'pg/paddleY' ayrı düğümler olduğu için bu update()
-    // raket pozisyonlarına HİÇ dokunmuyor.
-    const next = pgComputeNext(pgGame, pgPaddleY);
-    const patch = { ball: next.ball, score: next.score, status: next.status, winner: next.winner };
+    // transaction() değil, tek yönlü okuma + hedefli update(): bu düğüme
+    // sadece sahip yazdığı için çakışma riski yok; transaction'ın her
+    // tick'te sunucuya gidip gelmesi gecikme biriktirip topu sıçratıyordu.
+    const patch = pgComputeNext(pgGame, pgPaddleY);
     pgGame = Object.assign({}, pgGame, patch);
     roomRef.child('pg/game').update(patch);
-    if(next.status !== 'playing') pgStopLoop();
+    if(patch.status !== 'playing') pgOwnerStopLoop();
   }
 
-  function pgMaybeStartLoop(){
-    if(pgLoopTimer || !IS_OWNER) return;
-    pgLoopTimer = setInterval(pgTick, PONG_TICK_MS);
+  function pgOwnerStartLoop(){
+    if(pgOwnerLoop || !IS_OWNER) return;
+    pgOwnerLoop = setInterval(pgOwnerTick, PG.TICK_MS);
   }
 
-  function pgStopLoop(){
-    if(pgLoopTimer){ clearInterval(pgLoopTimer); pgLoopTimer = null; }
+  function pgOwnerStopLoop(){
+    if(pgOwnerLoop){ clearInterval(pgOwnerLoop); pgOwnerLoop = null; }
   }
 
-  // "Başlat / Yeni Tur": herkes basabilir — skoru koruyarak yeni bir tur başlatır.
+  // Geri sayımı SADECE sahip yürütür (3→2→1→Başla), her adımda 'pg/game'e
+  // yazar; diğer taraf bu değeri okuyup ekranda gösterir + sesini çalar.
+  function pgOwnerStartCountdown(){
+    if(pgOwnerCountdown || !IS_OWNER) return;
+    let n = (pgGame && pgGame.countdown) || PG.COUNTDOWN_FROM;
+    pgOwnerCountdown = setInterval(() => {
+      if(!roomRef || !pgGame || pgGame.status !== 'countdown'){ clearInterval(pgOwnerCountdown); pgOwnerCountdown = null; return; }
+      n -= 1;
+      const prevSeq = (pgGame.evt && pgGame.evt.seq) || 0;
+      if(n > 0){
+        const patch = { countdown: n, evt: { type: 'countdown', seq: prevSeq + 1 } };
+        pgGame = Object.assign({}, pgGame, patch);
+        roomRef.child('pg/game').update(patch);
+      } else {
+        clearInterval(pgOwnerCountdown); pgOwnerCountdown = null;
+        const patch = { status: 'playing', countdown: 0, evt: { type: 'go', seq: prevSeq + 1 } };
+        pgGame = Object.assign({}, pgGame, patch);
+        roomRef.child('pg/game').update(patch);
+        pgOwnerStartLoop();
+      }
+    }, 700);
+  }
+
+  // ---------- Kullanıcı eylemleri ----------
+  // "Başlat / Yeni Tur": herkes basabilir — skoru koruyarak geri sayımla
+  // yeni bir tur başlatır. Fiili geri sayım tikleri yalnızca sahipte çalışır
+  // (pgOwnerStartCountdown), ama tetikleyen taraf herkes olabilir.
   function startPongRound(){
     if(!roomRef) return;
     roomRef.child('pg/game').once('value').then(snap => {
       const cur = snap.val();
-      const fresh = pgInitialGame(cur && cur.score);
-      fresh.status = 'playing';
+      const prevSeq = (cur && cur.evt && cur.evt.seq) || 0;
+      const fresh = pgFreshGame(cur && cur.score);
+      fresh.status = 'countdown';
+      fresh.countdown = PG.COUNTDOWN_FROM;
+      fresh.evt = { type: 'countdown', seq: prevSeq + 1 };
       roomRef.child('pg/game').set(fresh);
-      roomRef.child('pg/paddleY').set(pgInitialPaddleY());
-      if(IS_OWNER) pgMaybeStartLoop();
+      roomRef.child('pg/paddleY').set(pgFreshPaddles());
     });
   }
 
   function resetPongScore(){
     if(!roomRef) return;
-    const fresh = pgInitialGame({ A: 0, B: 0 });
-    roomRef.child('pg/game').set(fresh);
-    roomRef.child('pg/paddleY').set(pgInitialPaddleY());
+    roomRef.child('pg/game').once('value').then(snap => {
+      const cur = snap.val();
+      const prevSeq = (cur && cur.evt && cur.evt.seq) || 0;
+      const fresh = pgFreshGame({ A: 0, B: 0 });
+      fresh.evt = { type: null, seq: prevSeq };
+      roomRef.child('pg/game').set(fresh);
+      roomRef.child('pg/paddleY').set(pgFreshPaddles());
+    });
   }
 
   // ==================================================================
